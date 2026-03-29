@@ -1,3 +1,5 @@
-zhipuai
 fastapi
 uvicorn
+zhipuai
+sniffio
+pydantic
