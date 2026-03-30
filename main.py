@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = ZhipuAI(api_key=os.environ.get("ZHIPU_API_KEY"))
+client = ZhipuAI(api_key="5829d2dcde0e400c8adb6bcf27799948.jjx85nTfpPyiocWt")
 
 # 对话历史存储
 conversation_history = {}
