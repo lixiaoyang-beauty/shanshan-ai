@@ -1,4 +1,5 @@
 import os
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = ZhipuAI(api_key="5829d2dcde0e400c8adb6bcf27799948.jjx85nTfpPyiocWt")
+client = ZhipuAI(api_key=os.getenv("ZHIPU_API_KEY"))
 
 # 对话历史存储
 conversation_history = {}
@@ -163,3 +164,7 @@ def clear_session(session_id: str):
     if session_id in conversation_history:
         del conversation_history[session_id]
     return {"status": "cleared"}
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
