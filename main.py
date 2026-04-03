@@ -59,7 +59,7 @@ class LearningDataResponse(BaseModel):
 
 
 # ========== MiniMax AI 调用 ==========
-def call_minimax(messages: List[Dict], max_tokens: int = 150) -> Optional[str]:
+def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
     """调用 MiniMax AI，返回回复文本"""
     print(f"[MiniMax] 调用开始，API_KEY存在={bool(MINIMAX_API_KEY)}")
     print(f"[MiniMax] 请求内容: model={MINIMAX_MODEL}, messages数量={len(messages)}")
@@ -84,15 +84,20 @@ def call_minimax(messages: List[Dict], max_tokens: int = 150) -> Optional[str]:
         print(f"[MiniMax] 正在请求 {MINIMAX_API_URL}")
         response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
         print(f"[MiniMax] 响应状态码: {response.status_code}")
-        print(f"[MiniMax] 响应内容: {response.text[:500]}")
+        print(f"[MiniMax] 响应内容: {response.text[:800]}")
 
         if response.status_code == 200:
             data = response.json()
             choices = data.get("choices", [])
             if choices:
-                content = choices[0].get("message", {}).get("content", "")
-                print(f"[MiniMax] 成功获取内容: {content[:100]}")
-                return content
+                msg = choices[0].get("message", {})
+                content = msg.get("content", "") or msg.get("text", "")
+                finish = choices[0].get("finish_reason", "")
+                print(f"[MiniMax] finish_reason={finish}, content长度={len(content)}, content前50字={content[:50]}")
+                if content and content.strip():
+                    return content.strip()
+                else:
+                    print("[MiniMax] content为空或仅空白")
             else:
                 print("[MiniMax] choices为空")
         else:
@@ -188,7 +193,7 @@ def chat(req: ChatRequest):
         {"role": "user", "name": "柯南", "content": user_content}
     ]
 
-    reply = call_minimax(messages, max_tokens=300)
+    reply = call_minimax(messages, max_tokens=500)
 
     if reply:
         # 保存对话历史
@@ -258,7 +263,7 @@ def receive_learning_data(req: LearningDataRequest):
         {"role": "user", "name": "闪闪", "content": analysis_content}
     ]
 
-    ai_message = call_minimax(messages, max_tokens=200)
+    ai_message = call_minimax(messages, max_tokens=500)
 
     if ai_message and ai_message.strip():
         trajectory.add_intervention("socratic_question", ai_message)
