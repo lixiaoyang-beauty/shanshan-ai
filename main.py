@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from zhipuai import ZhipuAI
-from typing import Optional
+from typing import Optional, List, Dict
+from datetime import datetime
 
 app = FastAPI()
 app.add_middleware(
@@ -19,6 +20,9 @@ client = ZhipuAI(api_key=os.getenv("ZHIPU_API_KEY"))
 # 对话历史存储
 conversation_history = {}
 
+# 学习轨迹存储
+learning_sessions: Dict[str, "LearningTrajectory"] = {}
+
 class ChatRequest(BaseModel):
     session_id: str = "default"
     question: str
@@ -31,6 +35,143 @@ class ChatResponse(BaseModel):
     reply: str
     emotion: str
 
+# ========== 新增：学习数据接口 ==========
+class AngleRecord(BaseModel):
+    angle: float
+    duration: float  # 秒
+
+class LearningDataRequest(BaseModel):
+    session_id: str = "default"
+    angle_history: List[AngleRecord] = []
+    wrong_answers: Dict[str, int] = {}  # {"类型": 次数}
+    exploration_stage: int
+    current_angle: float
+    idle_time: float  # 秒
+
+class LearningDataResponse(BaseModel):
+    status: str
+    intervention: str  # "none" | "gentle_hint" | "socratic_question" | "positive"
+    message: Optional[str] = None
+
+# ========== 干预策略生成 ==========
+def generate_intervention(session_id: str, data: LearningDataRequest) -> LearningDataResponse:
+    """分析玩家学习状态，返回干预策略"""
+    trajectory = learning_sessions.get(session_id)
+
+    # 更新迷思概念记录
+    for wrong_type, count in data.wrong_answers.items():
+        if trajectory:
+            if wrong_type not in trajectory.misconceptions:
+                trajectory.misconceptions.append(wrong_type)
+            trajectory.wrong_counts[wrong_type] = max(trajectory.wrong_counts.get(wrong_type, 0), count)
+
+    # 1. 角度停滞检测：玩家在 <5° 范围停留超过20秒
+    stagnant_angles = [r for r in data.angle_history if r.duration > 20]
+    if stagnant_angles:
+        return LearningDataResponse(
+            status="received",
+            intervention="socratic_question",
+            message="你在某个角度停留很久了，是不是有什么疑问？光线的方向有什么变化吗？"
+        )
+
+    # 2. 快速滑动没停留 → 乱玩
+    if len(data.angle_history) >= 3:
+        avg_duration = sum(r.duration for r in data.angle_history[-5:]) / min(5, len(data.angle_history))
+        if avg_duration < 1.5:
+            return LearningDataResponse(
+                status="received",
+                intervention="gentle_hint",
+                message="慢一点观察，光线在不同角度时方向有什么变化？"
+            )
+
+    # 3. 反复答错同一类 → 迷思概念
+    for wrong_type, count in data.wrong_answers.items():
+        if count >= 2:
+            if wrong_type == "refraction_rule":
+                msg = "你觉得光从水射向空气时，方向会怎么变？换一个角度再观察观察。"
+            elif wrong_type == "critical_angle":
+                msg = "还记得临界角吗？当折射角等于90度时的入射角就叫临界角哦。再想想看！"
+            elif wrong_type == "total_reflection":
+                msg = "折射光消失后，光去了哪里呢？注意看反射光有没有变化！"
+            else:
+                msg = "再仔细观察实验台，光线有什么变化？"
+            return LearningDataResponse(
+                status="received",
+                intervention="socratic_question",
+                message=msg
+            )
+
+    # 4. 玩家探索到关键角度时的鼓励
+    if data.current_angle >= 45 and data.current_angle < 50 and data.exploration_stage >= 3:
+        return LearningDataResponse(
+            status="received",
+            intervention="positive",
+            message="你已经接近临界角了！再增大一点点，看看会发生什么！"
+        )
+
+    # 5. 全都对了 → 鼓励
+    total_wrong = sum(data.wrong_answers.values())
+    if total_wrong == 0 and len(data.angle_history) >= 5:
+        return LearningDataResponse(
+            status="received",
+            intervention="positive",
+            message="太棒了！你的观察力很强！继续探索吧！"
+        )
+
+    return LearningDataResponse(status="received", intervention="none", message=None)
+
+# ========== 学习轨迹类 ==========
+class LearningTrajectory:
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.angle_exploration: List[AngleRecord] = []
+        self.misconceptions: List[str] = []
+        self.wrong_counts: Dict[str, int] = {}
+        self.socratic_questions_asked: List[str] = []
+        self.correct_concepts: List[str] = []
+        self.created_at = datetime.now()
+
+    def add_intervention(self, intervention_type: str, message: str):
+        if intervention_type == "socratic_question":
+            self.socratic_questions_asked.append(message)
+
+    def to_dict(self):
+        return {
+            "session_id": self.session_id,
+            "misconceptions": self.misconceptions,
+            "wrong_counts": self.wrong_counts,
+            "socratic_questions": self.socratic_questions_asked,
+            "correct_concepts": self.correct_concepts,
+            "created_at": self.created_at.isoformat()
+        }
+
+# ========== 学习数据接口 ==========
+@app.post("/learning-data", response_model=LearningDataResponse)
+def receive_learning_data(req: LearningDataRequest):
+    # 获取或创建学习轨迹
+    if req.session_id not in learning_sessions:
+        learning_sessions[req.session_id] = LearningTrajectory(req.session_id)
+
+    trajectory = learning_sessions[req.session_id]
+    trajectory.angle_exploration = req.angle_history
+
+    # 分析并生成干预
+    result = generate_intervention(req.session_id, req)
+
+    # 记录干预
+    if result.intervention != "none" and result.message:
+        trajectory.add_intervention(result.intervention, result.message)
+
+    return result
+
+@app.get("/learning-trajectory/{session_id}")
+def get_trajectory(session_id: str):
+    """获取某个session的学习轨迹（用于后续分析）"""
+    if session_id not in learning_sessions:
+        return {"error": "session not found"}
+    return learning_sessions[session_id].to_dict()
+
+# ========== 原有聊天接口 ==========
 KNOWLEDGE = """
 【光学知识库-小学四年级版】
 折射：光从一种介质进入另一种介质时方向会改变，叫光的折射。
