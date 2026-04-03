@@ -98,8 +98,9 @@ public class LearningTracker : MonoBehaviour
             lastSendTime = Time.time;
         }
 
-        // 只在玩家重新开始滑动时才显示队列中的AI消息
-        if (isMovingSlider && aiMessageQueue.Count > 0 && !isShowingAiMessage)
+        // 只在玩家重新开始滑动时才显示队列中的AI消息，且不能在等待选项时打扰
+        bool isWaitingChoice = chapterManager != null && chapterManager.IsWaitingForChoice();
+        if (isMovingSlider && aiMessageQueue.Count > 0 && !isShowingAiMessage && !isWaitingChoice)
         {
             ShowNextAiMessage();
         }

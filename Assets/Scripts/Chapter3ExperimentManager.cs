@@ -29,7 +29,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     public Slider angleSlider;
 
     [Header("── 闪闪服务 ──")]
-    public string shanShanServerUrl = "http://localhost:8000";
+    public string shanShanServerUrl = "https://shanshan-ai-production.up.railway.app";
     public string sessionId = "player1";
 
     [Header("── 头像 ──")]
@@ -174,6 +174,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
         // 自动查找 LearningTracker（未在 Inspector 连线时）
         if (learningTracker == null)
             learningTracker = FindObjectOfType<LearningTracker>();
+
+        Debug.Log("=== Chapter3ExperimentManager Start === learningTracker=" + (learningTracker != null));
 
         StartCoroutine(StartChapter());
     }
@@ -865,11 +867,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
     }
 
     // AI 消息显示（带回调，用于 LearningTracker 非阻塞队列）
-    void ShowAiMessage(string msg, System.Action onDone)
+    public void ShowAiMessage(string msg, System.Action onDone)
     {
         if (shanShanText != null) { shanShanText.text = msg; ApplyFont(shanShanText); }
         Show(shanShanPanel);
         StartCoroutine(AiMessageDoneDelay(msg.Length * 0.04f + 0.5f, onDone));
+    }
+
+    // 外部查询：当前是否在等待玩家选择选项
+    public bool IsWaitingForChoice()
+    {
+        return waitingForChoice;
     }
 
     IEnumerator AiMessageDoneDelay(float delay, System.Action onDone)
