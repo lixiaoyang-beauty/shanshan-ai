@@ -15,7 +15,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = ZhipuAI(api_key=os.getenv("ZHIPU_API_KEY"))
+# 懒加载 ZhipuAI 客户端（只有 /chat 接口需要，/learning-data 不需要）
+def get_zhipu_client():
+    api_key = os.getenv("ZHIPU_API_KEY")
+    if not api_key:
+        return None
+    return ZhipuAI(api_key=api_key)
 
 # 对话历史存储
 conversation_history = {}
@@ -271,7 +276,13 @@ def chat(req: ChatRequest):
     messages.append({"role": "user", "content": req.question})
 
     try:
-        response = client.chat.completions.create(
+        zhipu_client = get_zhipu_client()
+        if zhipu_client is None:
+            return ChatResponse(
+                reply="闪闪暂时有点累了，你先继续观察实验台，有什么发现吗？",
+                emotion="normal"
+            )
+        response = zhipu_client.chat.completions.create(
             model="glm-4-flash",
             messages=messages,
             max_tokens=150,
