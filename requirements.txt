@@ -1,5 +1,4 @@
 fastapi
 uvicorn
-zhipuai
-sniffio
+requests
 pydantic
