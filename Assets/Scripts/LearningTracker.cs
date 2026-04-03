@@ -21,9 +21,9 @@ public class LearningTracker : MonoBehaviour
     private List<AngleRecord> angleHistory = new List<AngleRecord>();
     private Dictionary<string, int> wrongAnswers = new Dictionary<string, int>();
     private float lastSendTime = 0f;
-    private float idleTime = 0f;
+    private float totalIdleTime = 0f;
+    private bool wasMoving = false;  // 上一帧是否在移动（滑块值有变化）
     private float lastSliderValue = -1f;
-    private bool isSliding = false;
 
     // AI 消息队列
     private Queue<string> aiMessageQueue = new Queue<string>();
@@ -33,6 +33,14 @@ public class LearningTracker : MonoBehaviour
     void Start()
     {
         lastSendTime = Time.time;
+        if (chapterManager == null)
+            chapterManager = FindObjectOfType<Chapter3ExperimentManager>();
+        // 初始化角度为当前slider值
+        if (chapterManager != null)
+        {
+            lastSliderValue = chapterManager.GetCurrentAngle();
+            lastAngle = lastSliderValue;
+        }
         Debug.Log("【测试】LearningTracker Start() 被调用了！游戏对象：" + gameObject.name + ", 场景：" + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
 
@@ -54,40 +62,43 @@ public class LearningTracker : MonoBehaviour
         if (isMovingSlider)
         {
             // 玩家在滑动滑块
-            if (lastSliderValue > 0 && !isSliding)
+            if (!wasMoving)
             {
-                // 刚刚停止滑动，记录停留时间
-                RecordAngleDuration(lastSliderValue, idleTime);
+                // 刚从停止变成开始移动，记录上一个停留的角度
+                float angleToRecord = lastSliderValue > 0 ? lastSliderValue : lastAngle;
+                if (totalIdleTime > 0.5f)
+                    RecordAngleDuration(angleToRecord, totalIdleTime);
+                totalIdleTime = 0f;
             }
             lastSliderValue = currentAngle;
-            idleTime = 0f;  // 重置停留计时
-            isSliding = true;
+            lastAngle = currentAngle;
+            wasMoving = true;
         }
         else
         {
-            // 玩家没有动滑块
-            if (isSliding)
+            // 玩家没有动滑块，累加停留计时
+            if (wasMoving)
             {
-                // 刚停止滑动，重置计时
-                idleTime = 0f;
+                // 刚从移动变成停止，totalIdleTime 已经记录，不需要额外操作
             }
-            else
-            {
-                // 持续没有滑动，累加计时（答题/阅读时）
-                idleTime += Time.deltaTime;
-            }
-            isSliding = false;
+            totalIdleTime += Time.deltaTime;
+            wasMoving = false;
         }
 
         lastAngle = currentAngle;
 
         if (Time.time - lastSendTime >= sendInterval)
         {
+            // 发数据前，如果玩家在停止状态，把累计的停留时间记录
+            if (!wasMoving && totalIdleTime > 2f)
+            {
+                RecordAngleDuration(lastSliderValue > 0 ? lastSliderValue : lastAngle, totalIdleTime);
+            }
             SendLearningData();
             lastSendTime = Time.time;
         }
 
-        // 只在玩家重新开始滑动时才显示队列中的AI消息（而不是阅读时打断）
+        // 只在玩家重新开始滑动时才显示队列中的AI消息
         if (isMovingSlider && aiMessageQueue.Count > 0 && !isShowingAiMessage)
         {
             ShowNextAiMessage();
@@ -155,7 +166,7 @@ public class LearningTracker : MonoBehaviour
             wrong_answers = wrongAnswers,
             exploration_stage = chapterManager.GetCurrentStage(),
             current_angle = lastAngle,
-            idle_time = idleTime
+            idle_time = totalIdleTime
         };
 
         string customJson = BuildLearningDataJson(data);
