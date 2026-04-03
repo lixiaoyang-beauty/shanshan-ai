@@ -43,6 +43,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
     public float n1 = 1.33f;
     public float n2 = 1.00f;
 
+    [Header("── 学习追踪 ──")]
+    public LearningTracker learningTracker;
+
     // 实验区域
     private RectTransform experimentArea;
     private Image incidentLine, reflectedLine, refractedLine;
@@ -167,6 +170,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         BuildStarDisplay();
         UpdateRayLines(15f);
         HideAllRays();
+
+        // 自动查找 LearningTracker（未在 Inspector 连线时）
+        if (learningTracker == null)
+            learningTracker = FindObjectOfType<LearningTracker>();
 
         StartCoroutine(StartChapter());
     }
@@ -342,6 +349,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             AudioManager.PlayWrong();
             ShanShanSayLocal("再仔细看！应该有3条：入射光、反射光、折射光。试试拖动滑块！");
+            learningTracker?.OnAnswerRecorded("line_count");
         }
     }
 
@@ -360,6 +368,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             AudioManager.PlayWrong();
             ShanShanSayLocal("再看看！拖动滑块，对比30度和45度时折射角的大小有什么变化？");
+            learningTracker?.OnAnswerRecorded("refraction_rule");
             StartCoroutine(DelayDo(2f, () => {
                 ShanShanSayLocal("入射角变大时，折射角会怎样？");
                 ShowChoiceBubble(
@@ -387,6 +396,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             AudioManager.PlayWrong();
             ShanShanSayLocal("不对！当折射角=90度时的入射角，叫临界角。再选一次！");
+            learningTracker?.OnAnswerRecorded("critical_angle");
             StartCoroutine(DelayDo(1.5f, () => {
                 ShanShanSayLocal("折射角刚好等于90度时，那个特殊入射角叫什么？");
                 ShowChoiceBubble(
@@ -430,6 +440,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         else
         {
             ShanShanSayLocal(reply);
+            learningTracker?.OnAnswerRecorded("prediction");
             // 答错了，给一次重选机会
             StartCoroutine(DelayDo(1.5f, ShowPredictionRetryBubble));
         }
@@ -501,6 +512,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         else
         {
             ShanShanSayLocal(reply);
+            learningTracker?.OnAnswerRecorded("total_reflection");
             // 答错了，给第二次选择机会
             StartCoroutine(DelayDo(1.5f, ShowTotalReflectionRetryBubble));
         }
@@ -528,6 +540,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
+            learningTracker?.OnAnswerRecorded("total_reflection");
             // 第二次还错，继续给机会，提示反射光变亮
             StartCoroutine(DelayDo(1.5f, ShowTotalReflectionThirdBubble));
         }
@@ -648,6 +661,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             AudioManager.PlayWrong();
             ShanShanSayLocal("再想想！记住两个条件：1.光从水到空气 2.入射角>=临界角，两个都要满足！");
+            learningTracker?.OnAnswerRecorded("verify_condition");
             StartCoroutine(DelayDo(2f, ShowVerifyPanel));
         }
     }
@@ -663,6 +677,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         else
         {
             ShanShanSayLocal("从侧面看角度很大会超过临界角！所以发生全反射，光出不来，古币消失！再想想看！");
+            learningTracker?.OnAnswerRecorded("coin_angle");
             // 答错了，给第二次选择机会
             StartCoroutine(DelayDo(1.5f, ShowCoinRetryBubble));
         }
@@ -847,6 +862,31 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (waitingForChoice && !forceShow) return;
         if (shanShanText != null) { shanShanText.text = msg; ApplyFont(shanShanText); }
         Show(shanShanPanel);
+    }
+
+    // AI 消息显示（带回调，用于 LearningTracker 非阻塞队列）
+    void ShowAiMessage(string msg, System.Action onDone)
+    {
+        if (shanShanText != null) { shanShanText.text = msg; ApplyFont(shanShanText); }
+        Show(shanShanPanel);
+        StartCoroutine(AiMessageDoneDelay(msg.Length * 0.04f + 0.5f, onDone));
+    }
+
+    IEnumerator AiMessageDoneDelay(float delay, System.Action onDone)
+    {
+        yield return new WaitForSeconds(delay);
+        onDone?.Invoke();
+    }
+
+    // 外部访问接口（LearningTracker 调用）
+    public float GetCurrentAngle()
+    {
+        return currentIncidentAngle;
+    }
+
+    public int GetCurrentStage()
+    {
+        return stage;
     }
 
     IEnumerator CallShanShanApi(string question, int stageOverride, System.Action onReplyDone = null)
