@@ -70,8 +70,8 @@ def generate_intervention(session_id: str, data: LearningDataRequest) -> Learnin
                 trajectory.misconceptions.append(wrong_type)
             trajectory.wrong_counts[wrong_type] = max(trajectory.wrong_counts.get(wrong_type, 0), count)
 
-    # 1. 角度停滞检测：玩家在 <5° 范围停留超过20秒
-    stagnant_angles = [r for r in data.angle_history if r.duration > 20]
+    # 1. 角度停滞检测：玩家在某个角度停留超过45秒（阅读/答题思考时间）
+    stagnant_angles = [r for r in data.angle_history if r.duration > 45]
     if stagnant_angles:
         return LearningDataResponse(
             status="received",
