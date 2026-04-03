@@ -18,7 +18,7 @@ app.add_middleware(
 # MiniMax API 配置
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_API_URL = "https://api.minimaxi.com/v1/text/chatcompletion_v2"
-MINIMAX_MODEL = "M2.7"
+MINIMAX_MODEL = "MiniMax-M2.7"
 
 # 对话历史存储
 conversation_history = {}
