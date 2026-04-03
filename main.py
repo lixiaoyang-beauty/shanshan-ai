@@ -59,7 +59,7 @@ class LearningDataResponse(BaseModel):
 
 
 # ========== MiniMax AI 调用 ==========
-def call_minimax(messages: List[Dict], max_tokens: int = 150) -> Optional[str]:
+def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
     """调用 MiniMax AI，返回回复文本"""
     print(f"[MiniMax] 调用开始，API_KEY存在={bool(MINIMAX_API_KEY)}")
     print(f"[MiniMax] 请求内容: model={MINIMAX_MODEL}, messages数量={len(messages)}")
@@ -84,15 +84,20 @@ def call_minimax(messages: List[Dict], max_tokens: int = 150) -> Optional[str]:
         print(f"[MiniMax] 正在请求 {MINIMAX_API_URL}")
         response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
         print(f"[MiniMax] 响应状态码: {response.status_code}")
-        print(f"[MiniMax] 响应内容: {response.text[:500]}")
+        print(f"[MiniMax] 响应内容: {response.text[:800]}")
 
         if response.status_code == 200:
             data = response.json()
             choices = data.get("choices", [])
             if choices:
-                content = choices[0].get("message", {}).get("content", "")
-                print(f"[MiniMax] 成功获取内容: {content[:100]}")
-                return content
+                msg = choices[0].get("message", {})
+                content = msg.get("content", "") or msg.get("text", "")
+                finish = choices[0].get("finish_reason", "")
+                print(f"[MiniMax] finish_reason={finish}, content长度={len(content)}, content前50字={content[:50]}")
+                if content and content.strip():
+                    return content.strip()
+                else:
+                    print("[MiniMax] content为空或仅空白")
             else:
                 print("[MiniMax] choices为空")
         else:
@@ -129,32 +134,16 @@ class LearningTrajectory:
 
 
 # ========== Prompt 模板 ==========
-SYSTEM_PROMPT = """你是艾莉博士的AI助理"闪闪"，陪伴小学生柯南探索光学实验。
+SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯南探索光学实验。
 
-【性格】
-好奇、略带惊讶、像朋友一样交流。
-偶尔说"等等我好像发现了什么"、"咦这很有意思"这类话体现性格。
-语气轻松，不像老师在讲课。
+【性格】好奇、略带惊讶、像朋友一样交流，语气轻松。
 
 【铁律】
 1. 永远不直接给答案
-2. 每次回复不超过3句话
-3. 必须以问句结尾，让玩家继续思考
-4. 不使用任何emoji表情符号
-5. 只回答和光学实验相关的问题
-6. 每次回复严格不超过45个汉字，超出必须删减，不能有多余的废话
-
-【光学知识库（仅供参考，不要直接背诵）】
-折射：光从一种介质进入另一种介质时方向会改变，叫光的折射。
-折射率：表示介质让光变慢的程度。水=1.33，空气=1.0。
-折射规律：入射角越大，折射角也越大（光从水射向空气时）。
-临界角：约48度。超过这个角度折射光消失。
-全反射条件：
-  条件1：光从折射率大的介质射向折射率小的介质（水→空气）
-  条件2：入射角大于等于临界角（约48度）
-全反射现象：折射光完全消失，所有光反射回原介质。
-古币消失原因：从侧面看时角度超过临界角，发生全反射，
-  光出不来，所以看不见古币。从上方看角度小于临界角，光能出来，能看见。
+2. 每次不超过3句话
+3. 必须以问句结尾
+4. 不用emoji
+5. 回复不超过45个汉字
 """
 
 STAGE_PROMPTS = {
@@ -188,7 +177,7 @@ def chat(req: ChatRequest):
         {"role": "user", "name": "柯南", "content": user_content}
     ]
 
-    reply = call_minimax(messages, max_tokens=300)
+    reply = call_minimax(messages, max_tokens=500)
 
     if reply:
         # 保存对话历史
@@ -258,7 +247,7 @@ def receive_learning_data(req: LearningDataRequest):
         {"role": "user", "name": "闪闪", "content": analysis_content}
     ]
 
-    ai_message = call_minimax(messages, max_tokens=200)
+    ai_message = call_minimax(messages, max_tokens=500)
 
     if ai_message and ai_message.strip():
         trajectory.add_intervention("socratic_question", ai_message)
