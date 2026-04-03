@@ -9,8 +9,8 @@ public class LearningTracker : MonoBehaviour
     [Header("── 配置 ──")]
     public string serverUrl = "https://shanshan-ai-production.up.railway.app";
     public string sessionId = "player1";
-    public float sendInterval = 5f;
-    public float stagnantThreshold = 20f;
+    public float stagnantThreshold = 45f;     // 闲置45秒才触发追问
+    public float checkInterval = 2f;           // 检查闲置的间隔
 
     [Header("── 引用 ──")]
     public Chapter3ExperimentManager chapterManager;
@@ -22,26 +22,29 @@ public class LearningTracker : MonoBehaviour
     private Dictionary<string, int> wrongAnswers = new Dictionary<string, int>();
     private float lastSendTime = 0f;
     private float totalIdleTime = 0f;
-    private bool wasMoving = false;  // 上一帧是否在移动（滑块值有变化）
+    private bool wasMoving = false;
     private float lastSliderValue = -1f;
+    private float lastActivityTime = 0f;
 
     // AI 消息队列
     private Queue<string> aiMessageQueue = new Queue<string>();
     private bool isShowingAiMessage = false;
     private bool hasLoggedStart = false;
+    private float lastStagnantCheck = 0f;
+    private bool stagnantAlertShown = false;
 
     void Start()
     {
         lastSendTime = Time.time;
+        lastActivityTime = Time.time;
         if (chapterManager == null)
             chapterManager = FindObjectOfType<Chapter3ExperimentManager>();
-        // 初始化角度为当前slider值
         if (chapterManager != null)
         {
             lastSliderValue = chapterManager.GetCurrentAngle();
             lastAngle = lastSliderValue;
         }
-        Debug.Log("【测试】LearningTracker Start() 被调用了！游戏对象：" + gameObject.name + ", 场景：" + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        Debug.Log("【LearningTracker】已启动，闲置阈值：" + stagnantThreshold + "秒");
     }
 
     void Update()
@@ -73,29 +76,31 @@ public class LearningTracker : MonoBehaviour
             lastSliderValue = currentAngle;
             lastAngle = currentAngle;
             wasMoving = true;
+            lastActivityTime = Time.time;
+            stagnantAlertShown = false;
         }
         else
         {
             // 玩家没有动滑块，累加停留计时
-            if (wasMoving)
-            {
-                // 刚从移动变成停止，totalIdleTime 已经记录，不需要额外操作
-            }
-            totalIdleTime += Time.deltaTime;
             wasMoving = false;
+            totalIdleTime += Time.deltaTime;
         }
 
         lastAngle = currentAngle;
 
-        if (Time.time - lastSendTime >= sendInterval)
+        // 按需检查：每 checkInterval 秒检查一次闲置状态
+        if (Time.time - lastStagnantCheck >= checkInterval)
         {
-            // 发数据前，如果玩家在停止状态，把累计的停留时间记录
-            if (!wasMoving && totalIdleTime > 2f)
+            lastStagnantCheck = Time.time;
+
+            // 闲置超过阈值，且还没发过这次闲置的提示
+            float idle = Time.time - lastActivityTime;
+            if (idle >= stagnantThreshold && !stagnantAlertShown)
             {
-                RecordAngleDuration(lastSliderValue > 0 ? lastSliderValue : lastAngle, totalIdleTime);
+                stagnantAlertShown = true;
+                Debug.Log("[LearningTracker] 玩家闲置超过" + stagnantThreshold + "秒，发送学习数据请求");
+                SendLearningDataForStagnation();
             }
-            SendLearningData();
-            lastSendTime = Time.time;
         }
 
         // 只在玩家重新开始滑动时才显示队列中的AI消息，且不能在等待选项时打扰
@@ -125,6 +130,8 @@ public class LearningTracker : MonoBehaviour
             wrongAnswers[wrongType] = 0;
         wrongAnswers[wrongType]++;
         Debug.Log("[LearningTracker] 答错上报: " + wrongType + ", 累计: " + wrongAnswers[wrongType]);
+        // 答错时立即发送学习数据，触发 AI 追问
+        SendLearningDataForWrongAnswer(wrongType);
     }
 
     public void ClearWrongAnswer(string wrongType)
@@ -138,27 +145,30 @@ public class LearningTracker : MonoBehaviour
         return wrongAnswers.TryGetValue(wrongType, out int v) ? v : 0;
     }
 
+    // 答错时调用：发送数据并请求 AI 追问
     public void OnAnswerRecorded(string wrongType)
     {
         RecordWrongAnswer(wrongType);
-        Debug.Log("[LearningTracker] 答错上报: " + wrongType + ", 累计: " + wrongAnswers[wrongType]);
-        SendLearningData();
-        lastSendTime = Time.time;
     }
 
-    void SendLearningData()
+    // 闲置超阈值时调用
+    void SendLearningDataForStagnation()
     {
-        if (chapterManager == null) return;
-        Debug.Log("[LearningTracker] 发送学习数据, wrongAnswers: " + wrongAnswers.Count);
-        while (angleHistory.Count > 10)
-            angleHistory.RemoveAt(0);
-
-        StartCoroutine(SendLearningDataCoroutine());
+        StartCoroutine(SendLearningDataCoroutine(isStagnation: true));
     }
 
-    IEnumerator SendLearningDataCoroutine()
+    // 答错时调用
+    void SendLearningDataForWrongAnswer(string wrongType)
+    {
+        StartCoroutine(SendLearningDataCoroutine(isStagnation: false, wrongType: wrongType));
+    }
+
+    IEnumerator SendLearningDataCoroutine(bool isStagnation = false, string wrongType = null)
     {
         if (chapterManager == null) yield break;
+
+        while (angleHistory.Count > 10)
+            angleHistory.RemoveAt(0);
 
         var data = new LearningDataPayload
         {
