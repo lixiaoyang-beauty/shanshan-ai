@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+zhipuai
+sniffio
+pydantic
