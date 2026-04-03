@@ -188,7 +188,7 @@ def chat(req: ChatRequest):
         {"role": "user", "name": "柯南", "content": user_content}
     ]
 
-    reply = call_minimax(messages, max_tokens=150)
+    reply = call_minimax(messages, max_tokens=300)
 
     if reply:
         # 保存对话历史
@@ -258,7 +258,7 @@ def receive_learning_data(req: LearningDataRequest):
         {"role": "user", "name": "闪闪", "content": analysis_content}
     ]
 
-    ai_message = call_minimax(messages, max_tokens=80)
+    ai_message = call_minimax(messages, max_tokens=200)
 
     if ai_message and ai_message.strip():
         trajectory.add_intervention("socratic_question", ai_message)
