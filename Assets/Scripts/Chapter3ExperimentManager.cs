@@ -207,23 +207,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void GiveHint(int level)
     {
-        string msg = stage switch
-        {
-            2 => level == 0 ? "试试拖动滑块，光线有变化吗？"
-               : level == 1 ? "入射角变大时，折射光方向有什么变化？"
-               :               "折射光向外偏了！继续增大角度观察！",
-            3 => level == 0 ? "比较30度和45度时折射角的大小"
-               : level == 1 ? "入射角越大，折射角也越大！"
-               :               "继续增大角度，快到临界角了！",
-            4 => level == 0 ? "折射光越来越弱，继续增大角度！"
-               : level == 1 ? "临界角约48度，超过它会发生特别的事！"
-               :               "把角度调到50度以上，看看会发生什么！",
-            5 => level == 0 ? "折射光消失了，这就是全反射！"
-               : level == 1 ? "全反射：光从水射向空气，角度超过临界角时发生！"
-               :               "点击下方按钮确认你的发现！",
-            _ => "试试移动滑块！"
-        };
-        ShanShanSayLocal(msg);
+        string context = $"玩家在阶段{stage}停留太久，hint等级{level}，当前角度{currentIncidentAngle:.1f}度，生成一句简短提示引导玩家继续探索";
+        StartCoroutine(ShanShanAsk(context));
     }
 
     // ══════════════════════════════════════════
@@ -248,7 +233,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         Show(shanShanPanel);
         StartCoroutine(ClearSession());
         StartCoroutine(DelayDo(0.5f, () =>
-            ShanShanSayLocal("你好！我是闪闪！实验台已准备好。点击实验区域里的开启入射光线按钮，看看会发生什么！")));
+            StartCoroutine(ShanShanAsk("玩家刚进入实验，闪闪打招呼并引导玩家点击开启入射光线按钮"));
     }
 
     // ══════════════════════════════════════════
@@ -266,15 +251,16 @@ public class Chapter3ExperimentManager : MonoBehaviour
         idleTimer = 0f; hintLevel = -1;
 
         StartCoroutine(DelayDo(0.8f, () => {
-            ShanShanSayLocal("光线出现了！你看到几条光线？");
-            ShowChoiceBubble(
-                new[]{ "1条", "2条", "3条", "4条" },
-                new System.Action[]{
-                    () => OnLineCountAnswer(1),
-                    () => OnLineCountAnswer(2),
-                    () => OnLineCountAnswer(3),
-                    () => OnLineCountAnswer(4)
-                });
+            StartCoroutine(ShanShanAsk("玩家刚开启光线，问他能看到几条光线", () => {
+                ShowChoiceBubble(
+                    new[]{ "1条", "2条", "3条", "4条" },
+                    new System.Action[]{
+                        () => OnLineCountAnswer(1),
+                        () => OnLineCountAnswer(2),
+                        () => OnLineCountAnswer(3),
+                        () => OnLineCountAnswer(4)
+                    });
+            }));
         }));
     }
 
@@ -300,14 +286,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
             stage = 4;
             idleTimer = 0f; hintLevel = -1;
             StartCoroutine(DelayDo(0.8f, () => {
-                ShanShanSayLocal("你发现规律了吗？入射角变大时，折射角会怎样？");
-                ShowChoiceBubble(
-                    new[]{ "也变大", "变小", "不变" },
-                    new System.Action[]{
-                        () => OnRefractionRuleAnswer(true),
-                        () => OnRefractionRuleAnswer(false),
-                        () => OnRefractionRuleAnswer(false)
-                    });
+                StartCoroutine(ShanShanAsk("玩家正在探索折射规律，问他入射角变大时折射角怎么变", () => {
+                    ShowChoiceBubble(
+                        new[]{ "也变大", "变小", "不变" },
+                        new System.Action[]{
+                            () => OnRefractionRuleAnswer(true),
+                            () => OnRefractionRuleAnswer(false),
+                            () => OnRefractionRuleAnswer(false)
+                        });
+                }));
             }));
         }
 
@@ -316,15 +303,16 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             stage4Triggered = true;
             StartCoroutine(DelayDo(0.8f, () => {
-                ShanShanSayLocal("折射光越来越弱！当折射角刚好等于90度时，那个特殊入射角叫什么？");
-                ShowChoiceBubble(
-                    new[]{ "临界角", "折射角", "入射角", "反射角" },
-                    new System.Action[]{
-                        () => OnCriticalAngleAnswer(true),
-                        () => OnCriticalAngleAnswer(false),
-                        () => OnCriticalAngleAnswer(false),
-                        () => OnCriticalAngleAnswer(false)
-                    });
+                StartCoroutine(ShanShanAsk("玩家接近临界角，折射光很弱，问他折射角=90度时的入射角叫什么", () => {
+                    ShowChoiceBubble(
+                        new[]{ "临界角", "折射角", "入射角", "反射角" },
+                        new System.Action[]{
+                            () => OnCriticalAngleAnswer(true),
+                            () => OnCriticalAngleAnswer(false),
+                            () => OnCriticalAngleAnswer(false),
+                            () => OnCriticalAngleAnswer(false)
+                        });
+                }));
             }));
         }
 
@@ -343,14 +331,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             EarnStar(0);
             AudioManager.PlayCorrect();
-            ShanShanSayLocal("答对！3条：入射光、反射光、折射光。折射就是光从水进入空气时方向改变！试试拖大角度观察！");
+            StartCoroutine(ShanShanAsk("玩家答对了3条光线，引导他继续探索增大角度观察折射"));
             StartCoroutine(DelayDo(3f, () =>
                 StartCoroutine(CallShanShanApi("玩家认识了3条光线，已了解折射概念，引导他拖动滑块增大角度探索折射规律", 2))));
         }
         else
         {
             AudioManager.PlayWrong();
-            ShanShanSayLocal("再仔细看！应该有3条：入射光、反射光、折射光。试试拖动滑块！");
+            StartCoroutine(ShanShanAsk("玩家答错了，引导他再仔细数一数有3条光线"));
             learningTracker?.OnAnswerRecorded("line_count");
         }
     }
@@ -362,24 +350,25 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             refractionRuleAnswered = true;
             AudioManager.PlayCorrect();  // 解锁临界角题
-            ShanShanSayLocal("答对！折射规律：入射角越大，折射角也越大，这就是折射定律！继续增大角度，快到临界角了！");
+            StartCoroutine(ShanShanAsk("玩家答对了折射规律，鼓励并引导他继续增大角度接近临界角"));
             StartCoroutine(DelayDo(3f, () =>
                 StartCoroutine(CallShanShanApi("玩家答对折射规律，引导他继续增大角度接近临界角48度", 3))));
         }
         else
         {
             AudioManager.PlayWrong();
-            ShanShanSayLocal("再看看！拖动滑块，对比30度和45度时折射角的大小有什么变化？");
+            StartCoroutine(ShanShanAsk("玩家答错了折射规律，引导他对比30度和45度的折射角变化"));
             learningTracker?.OnAnswerRecorded("refraction_rule");
             StartCoroutine(DelayDo(2f, () => {
-                ShanShanSayLocal("入射角变大时，折射角会怎样？");
-                ShowChoiceBubble(
-                    new[]{ "也变大", "变小", "不变" },
-                    new System.Action[]{
-                        () => OnRefractionRuleAnswer(true),
-                        () => OnRefractionRuleAnswer(false),
-                        () => OnRefractionRuleAnswer(false)
-                    });
+                StartCoroutine(ShanShanAsk("再次问玩家：入射角变大时，折射角怎么变？", () => {
+                    ShowChoiceBubble(
+                        new[]{ "也变大", "变小", "不变" },
+                        new System.Action[]{
+                            () => OnRefractionRuleAnswer(true),
+                            () => OnRefractionRuleAnswer(false),
+                            () => OnRefractionRuleAnswer(false)
+                        });
+                }));
             }));
         }
     }
@@ -390,25 +379,26 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (correct)
         {
             AudioManager.PlayCorrect();
-            ShanShanSayLocal("答对！临界角是发生全反射的最小入射角。水的临界角约48度，继续增大超过它，看看会发生什么！");
+            StartCoroutine(ShanShanAsk("玩家答对了临界角，引导他把角度增大超过48度观察全反射"));
             StartCoroutine(DelayDo(3f, () =>
                 StartCoroutine(CallShanShanApi("玩家理解临界角，引导他把角度增大超过48度发现全反射", 4))));
         }
         else
         {
             AudioManager.PlayWrong();
-            ShanShanSayLocal("不对！当折射角=90度时的入射角，叫临界角。再选一次！");
+            StartCoroutine(ShanShanAsk("玩家答错了临界角概念，引导他再选一次"));
             learningTracker?.OnAnswerRecorded("critical_angle");
             StartCoroutine(DelayDo(1.5f, () => {
-                ShanShanSayLocal("折射角刚好等于90度时，那个特殊入射角叫什么？");
-                ShowChoiceBubble(
-                    new[]{ "临界角", "折射角", "入射角", "反射角" },
-                    new System.Action[]{
-                        () => OnCriticalAngleAnswer(true),
-                        () => OnCriticalAngleAnswer(false),
-                        () => OnCriticalAngleAnswer(false),
-                        () => OnCriticalAngleAnswer(false)
-                    });
+                StartCoroutine(ShanShanAsk("再次问玩家：折射角=90度时的入射角叫什么？", () => {
+                    ShowChoiceBubble(
+                        new[]{ "临界角", "折射角", "入射角", "反射角" },
+                        new System.Action[]{
+                            () => OnCriticalAngleAnswer(true),
+                            () => OnCriticalAngleAnswer(false),
+                            () => OnCriticalAngleAnswer(false),
+                            () => OnCriticalAngleAnswer(false)
+                        });
+                }));
             }));
         }
     }
@@ -420,14 +410,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
-        ShanShanSayLocal("继续增大角度，你猜折射光会怎样？");
-        ShowChoiceBubble(
-            new[]{ "变得更强", "逐渐消失", "方向不变" },
-            new System.Action[]{
-                () => OnPrediction(false, "继续观察，折射光会越来越弱哦！"),
-                () => OnPrediction(true,  "好预测！继续拖动验证你的猜测！"),
-                () => OnPrediction(false, "方向会变的！继续增大角度看看！")
-            });
+        StartCoroutine(ShanShanAsk("玩家接近临界角，问他继续增大角度折射光会怎样", () => {
+            ShowChoiceBubble(
+                new[]{ "变得更强", "逐渐消失", "方向不变" },
+                new System.Action[]{
+                    () => OnPrediction(false, "继续观察，折射光会越来越弱哦！"),
+                    () => OnPrediction(true,  "好预测！继续拖动验证你的猜测！"),
+                    () => OnPrediction(false, "方向会变的！继续增大角度看看！")
+                });
+        }));
     }
 
     void OnPrediction(bool correct, string reply)
@@ -450,14 +441,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowPredictionRetryBubble()
     {
-        ShanShanSayLocal("再仔细看看折射光，它变强了还是变弱了？");
-        ShowChoiceBubble(
-            new[]{ "变得更强", "逐渐消失", "方向不变" },
-            new System.Action[]{
-                () => OnPredictionSecond(false),
-                () => OnPredictionSecond(true),
-                () => OnPredictionSecond(false)
-            });
+        StartCoroutine(ShanShanAsk("玩家预测折射光会变强，引导他再仔细观察折射光强度变化", () => {
+            ShowChoiceBubble(
+                new[]{ "变得更强", "逐渐消失", "方向不变" },
+                new System.Action[]{
+                    () => OnPredictionSecond(false),
+                    () => OnPredictionSecond(true),
+                    () => OnPredictionSecond(false)
+                });
+        }));
     }
 
     void OnPredictionSecond(bool correct)
@@ -465,12 +457,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
-            ShanShanSayLocal("对！折射光在逐渐变弱，继续增大角度观察！");
+            StartCoroutine(ShanShanAsk("玩家答对了折射光变弱，鼓励他继续增大角度"));
             StartCoroutine(CallShanShanApi("玩家发现折射光逐渐消失，正确预测折射规律，请鼓励他继续增大角度接近临界角", 3));
         }
         else
         {
-            ShanShanSayLocal("再看看折射光，它会越来越弱哦！继续增大角度验证！");
+            StartCoroutine(ShanShanAsk("玩家答错了折射光强度变化，引导他继续增大角度观察"));
             StartCoroutine(CallShanShanApi("玩家预测折射光方向或强度变化，继续引导他观察并增大角度", 3));
         }
     }
@@ -493,15 +485,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
     IEnumerator TotalReflectionSequence()
     {
         yield return new WaitForSeconds(0.5f);
-        ShanShanSayLocal("！！折射光消失了！！这是怎么回事？你觉得光去哪了？");
-        yield return new WaitForSeconds(1.5f);
-        ShowChoiceBubble(
-            new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
-            new System.Action[]{
-                () => OnTotalReflAnswer(false, "光没有消失哦！看看反射光变亮了吗？"),
-                () => OnTotalReflAnswer(true,  "对！光全部反射回水中——这就是全反射！"),
-                () => OnTotalReflAnswer(false, "不是被吸收！看看反射光，它变亮了吗？")
-            });
+        StartCoroutine(ShanShanAsk("全反射发生了！折射光消失了！用惊讶语气问玩家光去哪了，引导他自己说出"消失了"", () => {
+            ShowChoiceBubble(
+                new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
+                new System.Action[]{
+                    () => OnTotalReflAnswer(false, "光没有消失哦！看看反射光变亮了吗？"),
+                    () => OnTotalReflAnswer(true,  "对！光全部反射回水中——这就是全反射！"),
+                    () => OnTotalReflAnswer(false, "不是被吸收！看看反射光，它变亮了吗？")
+                });
+        }));
     }
 
     void OnTotalReflAnswer(bool correct, string reply)
@@ -522,14 +514,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowTotalReflectionRetryBubble()
     {
-        ShanShanSayLocal("再想想！折射光真的消失了吗？它只是换了个方向——");
-        ShowChoiceBubble(
-            new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
-            new System.Action[]{
-                () => OnTotalReflAnswerSecond(false, "还是不对哦！注意观察反射光——它变亮了！"),
-                () => OnTotalReflAnswerSecond(true,  "对！光全部反射回水中——这就是全反射！"),
-                () => OnTotalReflAnswerSecond(false, "不是被吸收！注意观察反射光——它变亮了！")
-            });
+        StartCoroutine(ShanShanAsk("玩家答错了折射光消失问题，引导他再想想光去了哪里", () => {
+            ShowChoiceBubble(
+                new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
+                new System.Action[]{
+                    () => OnTotalReflAnswerSecond(false, "还是不对哦！注意观察反射光——它变亮了！"),
+                    () => OnTotalReflAnswerSecond(true,  "对！光全部反射回水中——这就是全反射！"),
+                    () => OnTotalReflAnswerSecond(false, "不是被吸收！注意观察反射光——它变亮了！")
+                });
+        }));
     }
 
     void OnTotalReflAnswerSecond(bool correct, string reply)
@@ -550,14 +543,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowTotalReflectionThirdBubble()
     {
-        ShanShanSayLocal("注意看反射光！它变亮了——说明光全部反射回去了！选哪个？");
-        ShowChoiceBubble(
-            new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
-            new System.Action[]{
-                () => OnTotalReflAnswerThird(false, "不是消失哦！反射光变亮了，说明光只是反射回去了！"),
-                () => OnTotalReflAnswerThird(true,  "对！光全部反射回水中——这就是全反射！"),
-                () => OnTotalReflAnswerThird(false, "不是被吸收！反射光变亮了，说明光反射回去了！")
-            });
+        StartCoroutine(ShanShanAsk("玩家需要判断光去哪了，引导他注意观察反射光变亮，提示光全部反射回去了", () => {
+            ShowChoiceBubble(
+                new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
+                new System.Action[]{
+                    () => OnTotalReflAnswerThird(false, "不是消失哦！反射光变亮了，说明光只是反射回去了！"),
+                    () => OnTotalReflAnswerThird(true,  "对！光全部反射回水中——这就是全反射！"),
+                    () => OnTotalReflAnswerThird(false, "不是被吸收！反射光变亮了，说明光反射回去了！")
+                });
+        }));
     }
 
     void OnTotalReflAnswerThird(bool correct, string reply)
@@ -571,7 +565,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         else
         {
             // 三次机会都用完了，不再给选项，直接解释并展示发现卡片
-            ShanShanSayLocal("其实是光全部反射回水中了，这就是全反射现象！");
+            StartCoroutine(ShanShanAsk("玩家多次答错，直接告诉他光全部反射回水中，这就是全反射"));
             StartCoroutine(DelayDo(2f, ShowDiscoveryCard));
         }
     }
@@ -628,18 +622,19 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void ShowVerifyPanel()
     {
-        ShanShanSayLocal("来考考你！选出正确的全反射条件：");
-        ShowChoiceBubble(
-            new[]{
-                "光从水射向空气，入射角>=临界角",
-                "光从空气射向水，角度越大越好",
-                "只要角度够大就会全反射"
-            },
-            new System.Action[]{
-                () => OnVerify(true),
-                () => OnVerify(false),
-                () => OnVerify(false)
-            });
+        StartCoroutine(ShanShanAsk("进入全反射条件选择题，让玩家选出正确的全反射条件", () => {
+            ShowChoiceBubble(
+                new[]{
+                    "光从水射向空气，入射角>=临界角",
+                    "光从空气射向水，角度越大越好",
+                    "只要角度够大就会全反射"
+                },
+                new System.Action[]{
+                    () => OnVerify(true),
+                    () => OnVerify(false),
+                    () => OnVerify(false)
+                });
+        }));
     }
 
     void OnVerify(bool correct)
@@ -651,18 +646,19 @@ public class Chapter3ExperimentManager : MonoBehaviour
             EarnStar(2);
             AudioManager.PlayCorrect();
             StartCoroutine(FlashScreen(new Color(0.2f,1f,0.3f,0.3f)));
-            ShanShanSayLocal("完全正确！两个条件缺一不可！现在想想：古币从侧面看时，入射角大于还是小于临界角？");
-            ShowChoiceBubble(
-                new[]{ "大于临界角", "小于临界角" },
-                new System.Action[]{
-                    () => OnCoinAnswer(true),
-                    () => OnCoinAnswer(false)
-                });
+            StartCoroutine(ShanShanAsk("玩家答对了全反射条件，联系古币案件，问他从侧面看时入射角大还是小", () => {
+                ShowChoiceBubble(
+                    new[]{ "大于临界角", "小于临界角" },
+                    new System.Action[]{
+                        () => OnCoinAnswer(true),
+                        () => OnCoinAnswer(false)
+                    });
+            }));
         }
         else
         {
             AudioManager.PlayWrong();
-            ShanShanSayLocal("再想想！记住两个条件：1.光从水到空气 2.入射角>=临界角，两个都要满足！");
+            StartCoroutine(ShanShanAsk("玩家答错了全反射条件，引导他记住两个条件：光从水到空气且入射角>=临界角"));
             learningTracker?.OnAnswerRecorded("verify_condition");
             StartCoroutine(DelayDo(2f, ShowVerifyPanel));
         }
@@ -673,12 +669,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
-            ShanShanSayLocal("对！侧面看角度大，超过临界角，发生全反射，光出不来，所以看不见古币！点击下方按钮回博物馆！");
+            StartCoroutine(ShanShanAsk("玩家答对了古币问题，解释为什么从侧面看不到古币，引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));
         }
         else
         {
-            ShanShanSayLocal("从侧面看角度很大会超过临界角！所以发生全反射，光出不来，古币消失！再想想看！");
+            StartCoroutine(ShanShanAsk("玩家答错了古币问题，解释从侧面看角度大导致全反射光出不来，引导再想"));
             learningTracker?.OnAnswerRecorded("coin_angle");
             // 答错了，给第二次选择机会
             StartCoroutine(DelayDo(1.5f, ShowCoinRetryBubble));
@@ -687,13 +683,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowCoinRetryBubble()
     {
-        ShanShanSayLocal("从侧面观察时，入射角大于还是小于临界角？");
-        ShowChoiceBubble(
-            new[]{ "大于临界角", "小于临界角" },
-            new System.Action[]{
-                () => OnCoinAnswerSecond(true),
-                () => OnCoinAnswerSecond(false)
-            });
+        StartCoroutine(ShanShanAsk("问玩家从侧面观察古币时，入射角大于还是小于临界角", () => {
+            ShowChoiceBubble(
+                new[]{ "大于临界角", "小于临界角" },
+                new System.Action[]{
+                    () => OnCoinAnswerSecond(true),
+                    () => OnCoinAnswerSecond(false)
+                });
+        }));
     }
 
     void OnCoinAnswerSecond(bool correct)
@@ -701,12 +698,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
-            ShanShanSayLocal("对！从侧面看角度大，超过临界角，光全部反射回水中出不来——所以看不见古币！点击下方按钮回博物馆！");
+            StartCoroutine(ShanShanAsk("玩家答对了，解释古币消失原因并引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));
         }
         else
         {
-            ShanShanSayLocal("不对哦！从侧面看时角度很大，会超过临界角，发生全反射，光出不来所以看不见！点击下方按钮回博物馆！");
+            StartCoroutine(ShanShanAsk("玩家答错了，解释从侧面看角度大导致全反射，引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));
         }
     }
@@ -864,6 +861,51 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (waitingForChoice && !forceShow) return;
         if (shanShanText != null) { shanShanText.text = msg; ApplyFont(shanShanText); }
         Show(shanShanPanel);
+    }
+
+    // AI 生成对话：发送上下文给闪闪，获取 AI 回复并显示，回复到达后执行回调
+    IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
+    {
+        if (shanShanBusy) yield break;
+        shanShanBusy = true;
+
+        string body =
+            "{\"session_id\":\"" + sessionId + "\"," +
+            "\"question\":\"" + EscapeJson(context) + "\"," +
+            "\"incident_angle\":" + currentIncidentAngle.ToString("F1") + "," +
+            "\"is_total_reflection\":" + (isTotalReflection ? "true" : "false") + "," +
+            "\"refract_angle\":" + currentRefractAngle.ToString("F1") + "," +
+            "\"exploration_stage\":" + stage + "}";
+
+        using var req = new UnityWebRequest(shanShanServerUrl + "/chat", "POST");
+        req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+        req.downloadHandler = new DownloadHandlerBuffer();
+        req.SetRequestHeader("Content-Type", "application/json");
+
+        yield return req.SendWebRequest();
+        shanShanBusy = false;
+
+        if (req.result == UnityWebRequest.Result.Success)
+        {
+            string json = req.downloadHandler.text;
+            int idx = json.IndexOf("\"reply\":\"");
+            if (idx >= 0)
+            {
+                int s = idx + 9;
+                int e = json.IndexOf("\"", s);
+                if (e > s)
+                {
+                    string reply = json.Substring(s, e - s);
+                    ShanShanSayLocal(reply, true);
+                    float delay = Mathf.Max(1f, reply.Length * 0.04f + 0.5f);
+                    yield return new WaitForSeconds(delay);
+                    onReplyDone?.Invoke();
+                    yield break;
+                }
+            }
+        }
+        ShanShanSayLocal("闪闪暂时累了，继续观察实验台吧！", true);
+        onReplyDone?.Invoke();
     }
 
     // AI 消息显示（带回调，用于 LearningTracker 非阻塞队列）
