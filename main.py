@@ -156,12 +156,12 @@ SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯
 """
 
 STAGE_PROMPTS = {
-    0: "玩家刚开启光线，好奇地引导他观察屏幕上出现了多少条光线，用轻松的语气问他，像在和他一起数数。",
-    1: "玩家在观察折射光，用朋友的语气问他折射光和入射光看起来有什么不同，不要解释原因。",
-    2: "玩家在探索折射规律，引导他比较不同角度下折射角的变化，用问句引导他自己说出规律。",
-    3: "玩家接近临界角了，折射光很弱，制造一点小紧张感，问他继续增大会发生什么，不要说全反射这个词。",
-    4: "全反射发生了！用惊讶的语气问他折射光去哪了，让他自己说出光消失了，不要直接解释。",
-    5: "玩家已经理解全反射，联系古币案件，用问句引导他思考从侧面看古币时角度是大还是小，会不会超过临界角。"
+    0: "生成一道简单选择题，考察玩家是否观察到入射光和折射光是分开的两条线。",
+    1: "生成一道选择题，测试玩家是否理解折射角随入射角增大而增大这个规律。",
+    2: "生成一道选择题，考察玩家能否说出折射角变化的规律（入射角越大折射角越大，但增幅变慢）。",
+    3: "生成一道选择题，引导玩家预测继续增大入射角会发生什么，接近但不说出临界角概念。",
+    4: "生成一道选择题，让玩家观察到折射光消失的现象，引导他描述光去哪了。",
+    5: "联系古币案件，生成一道选择题问：从侧面看古币时，古币反射的光是否会因为角度大而发生全反射？"
 }
 
 
@@ -199,10 +199,15 @@ def chat(req: ChatRequest):
 【当前阶段任务】
 {stage_prompt}
 
-{req.question}
+你必须用苏格拉底式追问引导玩家思考。
 
-必须严格按以下JSON格式回复，不要有其他文字：
-{{"question":"闪闪的问题（不超过40字，以问号结尾）","options":["选项1","选项2","选项3"]}}"""
+回复格式要求（必须严格按此JSON格式，不要有其他文字）：
+{{"question":"一个选择题问题，不超过40字，必须以问号结尾","options":["选项A","选项B","选项C"]}}
+
+选项要求：
+- 3个选项，必须是不同的choice
+- 每个选项不超过15字
+- 要围绕当前实验现象设计"""
 
     messages = [
         {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
@@ -216,19 +221,30 @@ def chat(req: ChatRequest):
 
     # 尝试解析JSON响应
     try:
-        # 提取JSON（可能在普通文本中）
         import re, json as _json
-        json_match = re.search(r'\{[^{}]*"question"[^{}]*\}', raw, re.DOTALL)
-        if json_match:
-            data = _json.loads(json_match.group())
-        else:
+        # 尝试直接解析（如果raw是纯JSON）
+        try:
             data = _json.loads(raw)
+        except:
+            # 否则尝试提取JSON块
+            # 策略：找第一个 { 到最后一个 } 之间的内容
+            first_brace = raw.find('{')
+            last_brace = raw.rfind('}')
+            if first_brace >= 0 and last_brace > first_brace:
+                json_str = raw[first_brace:last_brace+1]
+                data = _json.loads(json_str)
+            else:
+                raise ValueError("找不到JSON")
 
         q = data.get("question", "")
         opts = data.get("options", [])
         feedback = data.get("feedback")
         correct = data.get("correct", False)
         next_action = data.get("next_action")
+
+        # 容错：如果options不是数组而是字符串，尝试分割
+        if isinstance(opts, str) and opts:
+            opts = [o.strip() for o in opts.split(',') if o.strip()]
 
         emotion = "normal"
         if feedback and any(w in feedback for w in ["！", "棒", "厉害", "对"]):
@@ -245,8 +261,10 @@ def chat(req: ChatRequest):
             next_action=next_action
         )
     except Exception as e:
-        print(f"[解析AI响应失败] {e} | 原始内容: {raw[:200]}")
-        # fallback：把原始内容当问题返回
+        print(f"[解析AI响应失败] {e} | 原始内容: {raw[:300]}")
+        # fallback：把原始内容当问题返回（截断到50字）
+        fallback_q = raw.strip()[:50] if raw.strip() else "闪闪暂时累了，继续观察吧"
+        return ChatResponse(question=fallback_q, options=[], emotion="normal")
         return ChatResponse(question=raw[:100], options=[], emotion="normal")
 
 
