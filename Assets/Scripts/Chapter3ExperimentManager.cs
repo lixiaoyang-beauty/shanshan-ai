@@ -881,7 +881,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     if (arrEnd > arrStart)
                     {
                         string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
-                        string[] parts = arrStr.Split(new char[] { '"' }, StringSplitOptions.RemoveEmptyEntries);
+                        string[] parts = arrStr.Split(new char[] { '"' });
                         var optList = new System.Collections.Generic.List<string>();
                         foreach (var p in parts)
                         {
@@ -987,7 +987,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 int arrEnd = json.IndexOf("]", arrStart);
                 if (arrEnd > arrStart) {
                     string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
-                    string[] parts = arrStr.Split(new char[] { '"' }, StringSplitOptions.RemoveEmptyEntries);
+                    string[] parts = arrStr.Split(new char[] { '"' });
                     var optList = new System.Collections.Generic.List<string>();
                     foreach (var p in parts) {
                         string trimmed = p.Trim().Trim(',', ' ');
