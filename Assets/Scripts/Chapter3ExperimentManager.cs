@@ -233,7 +233,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
         Show(shanShanPanel);
         StartCoroutine(ClearSession());
         StartCoroutine(DelayDo(0.5f, () =>
-            StartCoroutine(ShanShanAsk("玩家刚进入实验，闪闪打招呼并引导玩家点击开启入射光线按钮"));
+            StartCoroutine(ShanShanAsk("玩家刚进入实验，闪闪打招呼并引导玩家点击开启入射光线按钮"))
+        ));
     }
 
     // ══════════════════════════════════════════
@@ -251,16 +252,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         idleTimer = 0f; hintLevel = -1;
 
         StartCoroutine(DelayDo(0.8f, () => {
-            StartCoroutine(ShanShanAsk("玩家刚开启光线，问他能看到几条光线", () => {
-                ShowChoiceBubble(
-                    new[]{ "1条", "2条", "3条", "4条" },
-                    new System.Action[]{
-                        () => OnLineCountAnswer(1),
-                        () => OnLineCountAnswer(2),
-                        () => OnLineCountAnswer(3),
-                        () => OnLineCountAnswer(4)
-                    });
-            }));
+            StartCoroutine(ShanShanAsk("玩家刚开启光线，问他能看到几条光线。选项：1条|2条|3条|4条"));
         }));
     }
 
@@ -410,15 +402,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
-        StartCoroutine(ShanShanAsk("玩家接近临界角，问他继续增大角度折射光会怎样", () => {
-            ShowChoiceBubble(
-                new[]{ "变得更强", "逐渐消失", "方向不变" },
-                new System.Action[]{
-                    () => OnPrediction(false, "继续观察，折射光会越来越弱哦！"),
-                    () => OnPrediction(true,  "好预测！继续拖动验证你的猜测！"),
-                    () => OnPrediction(false, "方向会变的！继续增大角度看看！")
-                });
-        }));
+        StartCoroutine(ShanShanAsk("玩家接近临界角（47度以上），折射光越来越弱，继续增大角度会发生什么？选项：变得更强|逐渐消失|方向不变"));
     }
 
     void OnPrediction(bool correct, string reply)
@@ -485,31 +469,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     IEnumerator TotalReflectionSequence()
     {
         yield return new WaitForSeconds(0.5f);
-        StartCoroutine(ShanShanAsk("全反射发生了！折射光消失了！用惊讶语气问玩家光去哪了，引导他自己说出"消失了"", () => {
-            ShowChoiceBubble(
-                new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
-                new System.Action[]{
-                    () => OnTotalReflAnswer(false, "光没有消失哦！看看反射光变亮了吗？"),
-                    () => OnTotalReflAnswer(true,  "对！光全部反射回水中——这就是全反射！"),
-                    () => OnTotalReflAnswer(false, "不是被吸收！看看反射光，它变亮了吗？")
-                });
-        }));
-    }
-
-    void OnTotalReflAnswer(bool correct, string reply)
-    {
-        ClearBubbles();
-        if (correct)
-        {
-            StartCoroutine(CallShanShanApi("玩家理解了光全部反射回水中，请确认这就是全反射", 5, ShowDiscoveryCard));
-        }
-        else
-        {
-            ShanShanSayLocal(reply);
-            learningTracker?.OnAnswerRecorded("total_reflection");
-            // 答错了，给第二次选择机会
-            StartCoroutine(DelayDo(1.5f, ShowTotalReflectionRetryBubble));
-        }
+        StartCoroutine(ShanShanAsk("全反射发生了！折射光消失了！用惊讶语气问玩家光去哪了。选项：光消失了|光全部反射回水中|光被水吸收了"));
     }
 
     void ShowTotalReflectionRetryBubble()
@@ -800,8 +760,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
             bc.pressedColor     = new Color(0f,0.5f,0.8f,1f);
             btn.colors = bc;
 
+            string capturedOption = options[idx];
             System.Action cb = callbacks[idx];
-            btn.onClick.AddListener(() => { ClearBubbles(); cb?.Invoke(); AudioManager.PlayClick(); });
+            btn.onClick.AddListener(() => {
+                lastSelectedOption = capturedOption;
+                ClearBubbles();
+                cb?.Invoke();
+                AudioManager.PlayClick();
+            });
 
             MakeTMP("T",go.transform,V2(0,0),V2(1,1),V2(4,4),V2(-4,-4),
                 options[idx],15,CREAM,TextAlignmentOptions.Center,false);
@@ -863,11 +829,20 @@ public class Chapter3ExperimentManager : MonoBehaviour
         Show(shanShanPanel);
     }
 
-    // AI 生成对话：发送上下文给闪闪，获取 AI 回复并显示，回复到达后执行回调
+    // ============================================================
+    // AI问题+选项系统（完整闭环）
+    // ============================================================
+    // 当前AI生成的问题和选项（用于发给AI评判）
+    private string aiCurrentQuestion = "";
+    private string[] aiCurrentOptions = new string[0];
+    private int wrongAttempts = 0;  // 本题错了几次
+
+    // AI生成问题+选项，并显示
     IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
     {
         if (shanShanBusy) yield break;
         shanShanBusy = true;
+        wrongAttempts = 0;
 
         string body =
             "{\"session_id\":\"" + sessionId + "\"," +
@@ -888,24 +863,189 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
-            int idx = json.IndexOf("\"reply\":\"");
-            if (idx >= 0)
+            // 解析 question 字段
+            int qIdx = json.IndexOf("\"question\":\"");
+            if (qIdx >= 0)
             {
-                int s = idx + 9;
-                int e = json.IndexOf("\"", s);
-                if (e > s)
+                int qStart = qIdx + 12;
+                int qEnd = json.IndexOf("\"", qStart);
+                string question = qEnd > qStart ? json.Substring(qStart, qEnd - qStart) : "";
+
+                // 解析 options 字段
+                string[] options = new string[0];
+                int optIdx = json.IndexOf("\"options\":[");
+                if (optIdx >= 0)
                 {
-                    string reply = json.Substring(s, e - s);
-                    ShanShanSayLocal(reply, true);
-                    float delay = Mathf.Max(1f, reply.Length * 0.04f + 0.5f);
-                    yield return new WaitForSeconds(delay);
-                    onReplyDone?.Invoke();
-                    yield break;
+                    int arrStart = json.IndexOf("[", optIdx);
+                    int arrEnd = json.IndexOf("]", arrStart);
+                    if (arrEnd > arrStart)
+                    {
+                        string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
+                        string[] parts = arrStr.Split(new char[] { '"' }, StringSplitOptions.RemoveEmptyEntries);
+                        var optList = new System.Collections.Generic.List<string>();
+                        foreach (var p in parts)
+                        {
+                            string trimmed = p.Trim().Trim(',', ' ');
+                            if (!string.IsNullOrEmpty(trimmed) && trimmed != ",")
+                                optList.Add(trimmed);
+                        }
+                        options = optList.ToArray();
+                    }
                 }
+
+                aiCurrentQuestion = question;
+                aiCurrentOptions = options;
+                ShanShanSayLocal(question, true);
+
+                if (options.Length > 0)
+                {
+                    yield return new WaitForSeconds(1f);
+                    // 所有选项共用同一个callback：发给AI评判
+                    System.Action[] cbs = new System.Action[options.Length];
+                    for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
+                    ShowChoiceBubble(options, cbs);
+                }
+                shanShanBusy = false;
+                onReplyDone?.Invoke();
+                yield break;
             }
         }
         ShanShanSayLocal("闪闪暂时累了，继续观察实验台吧！", true);
+        shanShanBusy = false;
         onReplyDone?.Invoke();
+    }
+
+    IEnumerator SendAnswerToAI()
+    {
+        // 等一下让玩家看清选中的效果
+        yield return new WaitForSeconds(0.3f);
+
+        string body =
+            "{\"session_id\":\"" + sessionId + "\"," +
+            "\"question\":\"" + EscapeJson(aiCurrentQuestion) + "\"," +
+            "\"incident_angle\":" + currentIncidentAngle.ToString("F1") + "," +
+            "\"is_total_reflection\":" + (isTotalReflection ? "true" : "false") + "," +
+            "\"refract_angle\":" + currentRefractAngle.ToString("F1") + "," +
+            "\"exploration_stage\":" + stage + "," +
+            "\"selected_option\":\"" + EscapeJson(lastSelectedOption) + "\"}";
+
+        using var req = new UnityWebRequest(shanShanServerUrl + "/chat", "POST");
+        req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+        req.downloadHandler = new DownloadHandlerBuffer();
+        req.SetRequestHeader("Content-Type", "application/json");
+
+        yield return req.SendWebRequest();
+
+        if (req.result == UnityWebRequest.Result.Success)
+        {
+            string json = req.downloadHandler.text;
+            ProcessAIAnswerResponse(json);
+        }
+    }
+
+    string lastSelectedOption = "";
+
+    void ProcessAIAnswerResponse(string json)
+    {
+        string feedback = "", question = "", nextAction = "";
+        bool correct = false;
+        string[] options = new string[0];
+
+        try
+        {
+            int fbIdx = json.IndexOf("\"feedback\":\"");
+            if (fbIdx >= 0) {
+                int fbStart = fbIdx + 12;
+                int fbEnd = json.IndexOf("\"", fbStart);
+                feedback = fbEnd > fbStart ? json.Substring(fbStart, fbEnd - fbStart) : "";
+            }
+
+            int corrIdx = json.IndexOf("\"correct\":");
+            if (corrIdx >= 0) {
+                int vStart = json.IndexOfAny(new char[] { 't', 'f' }, corrIdx + 10);
+                if (vStart > corrIdx)
+                    correct = json.Substring(vStart, 4) == "true";
+            }
+
+            int naIdx = json.IndexOf("\"next_action\":\"");
+            if (naIdx >= 0) {
+                int naStart = naIdx + 15;
+                int naEnd = json.IndexOf("\"", naStart);
+                nextAction = naEnd > naStart ? json.Substring(naStart, naEnd - naStart) : "";
+            }
+
+            int qIdx = json.IndexOf("\"question\":\"");
+            if (qIdx >= 0) {
+                int qStart = qIdx + 12;
+                int qEnd = json.IndexOf("\"", qStart);
+                question = qEnd > qStart ? json.Substring(qStart, qEnd - qStart) : "";
+            }
+
+            int optIdx = json.IndexOf("\"options\":[");
+            if (optIdx >= 0) {
+                int arrStart = json.IndexOf("[", optIdx);
+                int arrEnd = json.IndexOf("]", arrStart);
+                if (arrEnd > arrStart) {
+                    string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
+                    string[] parts = arrStr.Split(new char[] { '"' }, StringSplitOptions.RemoveEmptyEntries);
+                    var optList = new System.Collections.Generic.List<string>();
+                    foreach (var p in parts) {
+                        string trimmed = p.Trim().Trim(',', ' ');
+                        if (!string.IsNullOrEmpty(trimmed) && trimmed != ",")
+                            optList.Add(trimmed);
+                    }
+                    options = optList.ToArray();
+                }
+            }
+        }
+        catch { }
+
+        ShanShanSayLocal(feedback, true);
+        lastSelectedOption = "";
+
+        if (nextAction == "show_discovery_card")
+        {
+            AudioManager.PlayCorrect();
+            StartCoroutine(DelayDo(1.5f, ShowDiscoveryCard));
+            return;
+        }
+
+        if (nextAction == "advance" || (correct && string.IsNullOrEmpty(nextAction)))
+        {
+            if (!string.IsNullOrEmpty(question) && options.Length > 0)
+            {
+                AudioManager.PlayCorrect();
+                aiCurrentQuestion = question;
+                aiCurrentOptions = options;
+                StartCoroutine(DelayDo(1.5f, () => {
+                    ShanShanSayLocal(question, true);
+                    ShowAIOptionBubble(options);
+                }));
+            }
+            return;
+        }
+
+        // retry 或答错
+        AudioManager.PlayWrong();
+        wrongAttempts++;
+        learningTracker?.OnAnswerRecorded("ai_wrong");
+        if (!string.IsNullOrEmpty(question) && options.Length > 0)
+        {
+            aiCurrentQuestion = question;
+            aiCurrentOptions = options;
+            StartCoroutine(DelayDo(1.5f, () => {
+                ShanShanSayLocal(question, true);
+                ShowAIOptionBubble(options);
+            }));
+        }
+    }
+
+    void ShowAIOptionBubble(string[] opts)
+    {
+        if (opts.Length == 0) return;
+        System.Action[] cbs = new System.Action[opts.Length];
+        for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
+        ShowChoiceBubble(opts, cbs);
     }
 
     // AI 消息显示（带回调，用于 LearningTracker 非阻塞队列）
@@ -963,16 +1103,16 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
-            int idx = json.IndexOf("\"reply\":\"");
+            // 新格式：从 question 字段获取回复
+            int idx = json.IndexOf("\"question\":\"");
             if (idx >= 0)
             {
-                int s = idx + 9;
+                int s = idx + 12;
                 int e = json.IndexOf("\"", s);
                 if (e > s)
                 {
-                    ShanShanSayLocal(json.Substring(s, e - s), true);
-                    // 等待闪闪文字打完后回调（按字数估算，每字40ms）
                     string replyText = json.Substring(s, e - s);
+                    ShanShanSayLocal(replyText, true);
                     float delay = Mathf.Max(1f, replyText.Length * 0.04f + 0.5f);
                     yield return new WaitForSeconds(delay);
                     onReplyDone?.Invoke();

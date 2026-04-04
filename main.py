@@ -35,10 +35,15 @@ class ChatRequest(BaseModel):
     is_total_reflection: bool
     refract_angle: float
     exploration_stage: int
+    selected_option: Optional[str] = None  # 玩家选择了哪个选项
 
 class ChatResponse(BaseModel):
-    reply: str
-    emotion: str
+    question: str           # 闪闪的问题
+    options: List[str]      # 选项列表
+    feedback: Optional[str] = None  # 对玩家答案的反馈（答对了/错了）
+    correct: bool = False   # 玩家答对了吗
+    emotion: str = "normal"
+    next_action: Optional[str] = None  # 告诉Unity该做什么: show_discovery_card, advance_stage, retry, end
 
 class AngleRecord(BaseModel):
     angle: float
@@ -165,7 +170,27 @@ STAGE_PROMPTS = {
 def chat(req: ChatRequest):
     stage_prompt = STAGE_PROMPTS.get(req.exploration_stage, STAGE_PROMPTS[1])
 
-    user_content = f"""【当前实验数据】
+    if req.selected_option:
+        # 玩家回答了选项，AI评判对错并生成反馈
+        user_content = f"""【当前情境】
+入射角：{req.incident_angle:.1f}度
+折射角：{req.refract_angle:.1f}度
+是否全反射：{"是" if req.is_total_reflection else "否"}
+探索阶段：{req.exploration_stage}
+
+【当前问题】
+{req.question}
+
+【玩家选择的答案】
+{req.selected_option}
+
+你的任务：判断玩家答案对错，给出简短反馈（15字以内），并决定下一步做什么。
+
+必须严格按以下JSON格式回复，不要有其他文字：
+{{"feedback":"对玩家的简短反馈","correct":true或false,"next_action":"show_discovery_card表示显示发现卡片，advance表示继续下一题，retry表示重试本题，end表示结束本题","question":"如果需要继续答题，填下一道问题（以问号结尾，40字以内），否则填空字符串","options":["选项1","选项2","选项3"]}}"""
+    else:
+        # AI生成问题
+        user_content = f"""【当前实验数据】
 入射角：{req.incident_angle:.1f}度
 折射角：{req.refract_angle:.1f}度
 是否全反射：{"是，折射光已消失" if req.is_total_reflection else "否，折射光存在"}
@@ -174,38 +199,58 @@ def chat(req: ChatRequest):
 【当前阶段任务】
 {stage_prompt}
 
-玩家说：{req.question}"""
+{req.question}
+
+必须严格按以下JSON格式回复，不要有其他文字：
+{{"question":"闪闪的问题（不超过40字，以问号结尾）","options":["选项1","选项2","选项3"]}}"""
 
     messages = [
         {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
         {"role": "user", "name": "柯南", "content": user_content}
     ]
 
-    reply = call_minimax(messages, max_tokens=500)
+    raw = call_minimax(messages, max_tokens=500)
 
-    if reply:
-        # 保存对话历史
-        if req.session_id not in conversation_history:
-            conversation_history[req.session_id] = []
-        history = conversation_history[req.session_id]
-        history.append({"role": "user", "content": req.question})
-        history.append({"role": "assistant", "content": reply})
-        if len(history) > 20:
-            conversation_history[req.session_id] = history[-20:]
+    if not raw:
+        return ChatResponse(question="闪闪暂时累了，继续观察吧", options=[], emotion="normal")
 
-        # 判断情绪
+    # 尝试解析JSON响应
+    try:
+        # 提取JSON（可能在普通文本中）
+        import re, json as _json
+        json_match = re.search(r'\{[^{}]*"question"[^{}]*\}', raw, re.DOTALL)
+        if json_match:
+            data = _json.loads(json_match.group())
+        else:
+            data = _json.loads(raw)
+
+        q = data.get("question", "")
+        opts = data.get("options", [])
+        feedback = data.get("feedback")
+        correct = data.get("correct", False)
+        next_action = data.get("next_action")
+
         emotion = "normal"
-        if any(w in reply for w in ["！", "消失", "发现", "厉害"]):
+        if feedback and any(w in feedback for w in ["！", "棒", "厉害", "对"]):
             emotion = "excited"
-        elif any(w in reply for w in ["？", "为什么", "你觉得"]):
+        elif feedback and any(w in feedback for w in ["？", "想想", "不对"]):
             emotion = "think"
 
-        return ChatResponse(reply=reply, emotion=emotion)
+        return ChatResponse(
+            question=q,
+            options=opts,
+            feedback=feedback,
+            correct=correct,
+            emotion=emotion,
+            next_action=next_action
+        )
+    except Exception as e:
+        print(f"[解析AI响应失败] {e} | 原始内容: {raw[:200]}")
+        # fallback：把原始内容当问题返回
+        return ChatResponse(question=raw[:100], options=[], emotion="normal")
 
-    return ChatResponse(
-        reply="闪闪暂时有点累了，你先继续观察实验台，有什么发现吗？",
-        emotion="normal"
-    )
+
+# ========== /learning-data 接口（MiniMax AI 驱动）============
 
 
 # ========== /learning-data 接口（MiniMax AI 驱动）============
