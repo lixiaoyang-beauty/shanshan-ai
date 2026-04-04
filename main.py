@@ -35,10 +35,15 @@ class ChatRequest(BaseModel):
     is_total_reflection: bool
     refract_angle: float
     exploration_stage: int
+    selected_option: Optional[str] = None  # 玩家选择了哪个选项
 
 class ChatResponse(BaseModel):
-    reply: str
-    emotion: str
+    question: str           # 闪闪的问题
+    options: List[str]      # 选项列表
+    feedback: Optional[str] = None  # 对玩家答案的反馈（答对了/错了）
+    correct: bool = False   # 玩家答对了吗
+    emotion: str = "normal"
+    next_action: Optional[str] = None  # 告诉Unity该做什么: show_discovery_card, advance_stage, retry, end
 
 class AngleRecord(BaseModel):
     angle: float
@@ -136,6 +141,9 @@ class LearningTrajectory:
 # ========== Prompt 模板 ==========
 SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯南探索光学实验。
 
+【故事背景】
+柯南在调查博物馆古币消失案件，向艾莉博士求助。艾莉博士给了柯南一副光路追踪眼镜和虚拟实验台，让他探索光的折射和全反射现象，揭开古币消失的秘密，之后去Chapter4揭晓案件真相。
+
 【性格】好奇、略带惊讶、像朋友一样交流，语气轻松。
 
 【铁律】
@@ -144,15 +152,16 @@ SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯
 3. 必须以问句结尾
 4. 不用emoji
 5. 回复不超过45个汉字
+6. 只能围绕光路实验台提问，不提棱镜等其他实验器材
 """
 
 STAGE_PROMPTS = {
-    0: "玩家刚进入实验，第一次看到光路实验台。你的任务：热情打招呼，引导玩家观察现在能看到几条光线（答案是3条：入射光、反射光、折射光）。不要解释什么是折射，让玩家自己数。",
-    1: "玩家正在观察折射现象（入射角约20-37度）。你的任务：引导玩家注意折射光的存在，问他折射光和入射光有什么不同。不要解释原因，只引导观察现象。",
-    2: "玩家发现了折射现象，正在探索规律（入射角约38-46度）。你的任务：引导玩家比较不同角度下折射角的变化，可以自然提示按Tab键看数据面板，引导玩家自己说出「入射角越大折射角越大」。",
-    3: "玩家接近临界角（入射角约47-49度），折射光变得很弱。你的任务：制造紧张感，引导玩家预测再增大角度会发生什么。可以说「我感觉要发生变化了」这类话，但不说出全反射。",
-    4: "全反射刚刚发生！折射光消失了！你的任务：用惊讶的语气反问玩家折射光去哪了。绝对不能解释全反射，让玩家先困惑，先表达，再确认。这是整个实验的高潮，要让玩家自己说出「消失了」。",
-    5: "玩家已经发现全反射，正在理解阶段。你的任务：引导玩家联系古币案。问玩家：从侧面看古币时，入射角大还是小？会不会超过临界角？让玩家自己推导出古币消失的原因。"
+    0: "引导语：「欢迎来到光学实验室！点击开启入射光线按钮开始探索吧！」问句：「开启光线后，你看到几条光线？」（选项：1条/2条/3条/4条）",
+    1: "引导语：「注意看折射光，它和入射光方向有什么不同？」（选项：方向不同/方向相同/方向相反）",
+    2: "引导语：「对比30度和45度的折射角，入射角变大时折射角怎么变？」（选项：也变大/变小/不变）",
+    3: "引导语：「入射角接近48度了，折射光越来越弱——你觉得再增大会怎样？」（选项：变得更强/逐渐消失/方向不变）",
+    4: "引导语：「折射光消失了！你觉得光去哪了？」（选项：光消失了/光全部反射回水中/光被水吸收了）",
+    5: "引导语：「从侧面看古币，入射角大还是小？会不会超过临界角？」（选项：大于临界角/小于临界角）"
 }
 
 
@@ -161,7 +170,27 @@ STAGE_PROMPTS = {
 def chat(req: ChatRequest):
     stage_prompt = STAGE_PROMPTS.get(req.exploration_stage, STAGE_PROMPTS[1])
 
-    user_content = f"""【当前实验数据】
+    if req.selected_option:
+        # 玩家回答了选项，AI评判对错并生成反馈
+        user_content = f"""【当前情境】
+入射角：{req.incident_angle:.1f}度
+折射角：{req.refract_angle:.1f}度
+是否全反射：{"是" if req.is_total_reflection else "否"}
+探索阶段：{req.exploration_stage}
+
+【当前问题】
+{req.question}
+
+【玩家选择的答案】
+{req.selected_option}
+
+你的任务：判断玩家答案对错，给出简短反馈（15字以内），并决定下一步做什么。
+
+必须严格按以下JSON格式回复，不要有其他文字：
+{{"feedback":"对玩家的简短反馈","correct":true或false,"next_action":"show_discovery_card表示显示发现卡片，advance表示继续下一题，retry表示重试本题，end表示结束本题","question":"如果需要继续答题，填下一道问题（以问号结尾，40字以内），否则填空字符串","options":["选项1","选项2","选项3"]}}"""
+    else:
+        # AI生成问题
+        user_content = f"""【当前实验数据】
 入射角：{req.incident_angle:.1f}度
 折射角：{req.refract_angle:.1f}度
 是否全反射：{"是，折射光已消失" if req.is_total_reflection else "否，折射光存在"}
@@ -170,38 +199,58 @@ def chat(req: ChatRequest):
 【当前阶段任务】
 {stage_prompt}
 
-玩家说：{req.question}"""
+{req.question}
+
+必须严格按以下JSON格式回复，不要有其他文字：
+{{"question":"闪闪的问题（不超过40字，以问号结尾）","options":["选项1","选项2","选项3"]}}"""
 
     messages = [
         {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
         {"role": "user", "name": "柯南", "content": user_content}
     ]
 
-    reply = call_minimax(messages, max_tokens=500)
+    raw = call_minimax(messages, max_tokens=500)
 
-    if reply:
-        # 保存对话历史
-        if req.session_id not in conversation_history:
-            conversation_history[req.session_id] = []
-        history = conversation_history[req.session_id]
-        history.append({"role": "user", "content": req.question})
-        history.append({"role": "assistant", "content": reply})
-        if len(history) > 20:
-            conversation_history[req.session_id] = history[-20:]
+    if not raw:
+        return ChatResponse(question="闪闪暂时累了，继续观察吧", options=[], emotion="normal")
 
-        # 判断情绪
+    # 尝试解析JSON响应
+    try:
+        # 提取JSON（可能在普通文本中）
+        import re, json as _json
+        json_match = re.search(r'\{[^{}]*"question"[^{}]*\}', raw, re.DOTALL)
+        if json_match:
+            data = _json.loads(json_match.group())
+        else:
+            data = _json.loads(raw)
+
+        q = data.get("question", "")
+        opts = data.get("options", [])
+        feedback = data.get("feedback")
+        correct = data.get("correct", False)
+        next_action = data.get("next_action")
+
         emotion = "normal"
-        if any(w in reply for w in ["！", "消失", "发现", "厉害"]):
+        if feedback and any(w in feedback for w in ["！", "棒", "厉害", "对"]):
             emotion = "excited"
-        elif any(w in reply for w in ["？", "为什么", "你觉得"]):
+        elif feedback and any(w in feedback for w in ["？", "想想", "不对"]):
             emotion = "think"
 
-        return ChatResponse(reply=reply, emotion=emotion)
+        return ChatResponse(
+            question=q,
+            options=opts,
+            feedback=feedback,
+            correct=correct,
+            emotion=emotion,
+            next_action=next_action
+        )
+    except Exception as e:
+        print(f"[解析AI响应失败] {e} | 原始内容: {raw[:200]}")
+        # fallback：把原始内容当问题返回
+        return ChatResponse(question=raw[:100], options=[], emotion="normal")
 
-    return ChatResponse(
-        reply="闪闪暂时有点累了，你先继续观察实验台，有什么发现吗？",
-        emotion="normal"
-    )
+
+# ========== /learning-data 接口（MiniMax AI 驱动）============
 
 
 # ========== /learning-data 接口（MiniMax AI 驱动）============
