@@ -1637,12 +1637,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
         rt.localScale = Vector3.zero; float t = 0f;
         while (t < 1f)
         {
+            if (rt == null || rt.gameObject == null) yield break;
             t += Time.deltaTime * 5f;
             float s = t < 0.7f ? Mathf.Lerp(0f,1.1f,t/0.7f) : Mathf.Lerp(1.1f,1f,(t-0.7f)/0.3f);
             rt.localScale = Vector3.one * s;
             yield return null;
         }
-        rt.localScale = Vector3.one;
+        if (rt != null && rt.gameObject != null) rt.localScale = Vector3.one;
     }
 
     IEnumerator DelayDo(float delay, System.Action onDone)
