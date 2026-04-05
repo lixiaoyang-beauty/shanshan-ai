@@ -137,6 +137,7 @@ def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
         print(f"[MiniMax] 响应状态码: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
+            print(f"[MiniMax] 响应体: {data}")
             choices = data.get("choices", [])
             if choices:
                 msg = choices[0].get("message", {})
