@@ -338,6 +338,8 @@ def get_trajectory(session_id: str):
 def clear_session(session_id: str):
     if session_id in conversation_history:
         del conversation_history[session_id]
+    if session_id in learning_sessions:
+        del learning_sessions[session_id]
     return {"status": "cleared"}
 
 
