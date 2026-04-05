@@ -207,11 +207,8 @@ def chat(req: ChatRequest):
     selected = req.selected_option
     wrong_count = req.wrong_count
 
-    if req.mode == "free":
-        return ChatResponse(correct=False, feedback="", next_action="free_question")
-
-    # 预设评判
-    if qid in PRESET_ANSWERS:
+    # 有 question_id 走预设评判
+    if qid and qid in PRESET_ANSWERS:
         preset = PRESET_ANSWERS[qid]
         correct = (selected == preset["correct"])
 
@@ -231,6 +228,27 @@ def chat(req: ChatRequest):
             feedback = HINTS_LEVEL2[qid]
 
         return ChatResponse(correct=False, feedback=feedback, next_action="retry")
+
+    # 没有 question_id 或未知 question_id，调用 MiniMax AI 生成苏格拉底式反馈
+    if selected:
+        # 用专门的反馈 prompt，不走 SYSTEM_PROMPT
+        feedback_prompt = f"""玩家回答了：{selected}
+
+你的任务是：根据玩家的回答，给出一句简短的苏格拉底式追问或引导，帮助他们自己思考出正确答案。
+
+要求：
+1. 不直接告诉答案，用问题引导
+2. 不超过3句话，45字以内
+3. 语气像朋友聊天，不要像老师
+4. 如果回答接近正确，予以肯定并轻轻引导
+5. 如果回答完全不对，用问题指出思考方向"""
+        messages = [
+            {"role": "user", "content": feedback_prompt}
+        ]
+        ai_reply = call_minimax(messages, max_tokens=200)
+        if ai_reply and ai_reply.strip():
+            return ChatResponse(correct=False, feedback=ai_reply.strip(), next_action="retry")
+        return ChatResponse(correct=False, feedback="再想想看？", next_action="retry")
 
     return ChatResponse(correct=False, feedback="再想想看？", next_action="retry")
 
