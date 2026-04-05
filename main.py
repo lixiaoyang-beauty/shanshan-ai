@@ -36,7 +36,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     correct: bool = False
     feedback: str = ""
-    next_action: str = ""
+    next_action: str = ""  # "retry" / "advance" / "discovery_card" / "lecture"
+    question: Optional[str] = None
+    options: Optional[List[str]] = None
 
 
 class LearningDataRequest(BaseModel):
@@ -106,13 +108,87 @@ LECTURES = {
 }
 
 
+# ========== 预设问题和选项 ==========
+# 每个问题对应的问题文本和选项（方案A：后端直接返回，不调MiniMax）
+PRESET_QUESTIONS = {
+    "q_line_count": {
+        "question": "哇，你看到光线了！你能观察到几条光线呀？",
+        "options": ["1条", "2条", "3条"]
+    },
+    "q_prediction": {
+        "question": "好有意思！如果继续增大人射角，你觉得折射光会怎么样？",
+        "options": ["变得更强", "逐渐消失", "方向不变"]
+    },
+    "q_refraction_rule": {
+        "question": "你发现规律了吗？人射角变大时，折射角怎么变？",
+        "options": ["折射角会变大", "折射角会变小", "折射角不变"]
+    },
+    "q_critical_angle": {
+        "question": "折射光越来越弱了！当折射角刚好等于90度时，那个人射角有特别的名字，叫什么呢？",
+        "options": ["临界角", "折射角", "人射角", "反射角"]
+    },
+    "q_total_reflection": {
+        "question": "哇！折射光消失了！光到底去了哪里呢？",
+        "options": ["光消失了", "光全部反射回水中", "光被水吸收了"]
+    },
+    "q_verify": {
+        "question": "你知道吗？发生全反射需要满足两个条件，是哪两个呢？",
+        "options": [
+            "光从水射向空气，人射角>=临界角",
+            "光从空气射向水，角度越大越好",
+            "只要角度够大就会全反射"
+        ]
+    },
+    "q_coin": {
+        "question": "最后来想想：从侧面观察古币时，人射角是大还是小？会不会发生全反射呢？",
+        "options": ["大于临界角", "小于临界角"]
+    },
+}
+
 # ========== 预设问题和答案 ==========
 PRESET_ANSWERS = {
-    "q1_1": {"correct": "3条", "feedback_correct": "太棒了！入射光和折射光一共3条！", "feedback_wrong": "差不多哦，再仔细数一数吧！"},
-    "q1_2": {"correct": "折射角会变大", "feedback_correct": "对了！入射角越大，折射角越大！", "feedback_wrong": "不对哦，再观察一下折射角的变化吧！"},
-    "q3_1": {"correct": "临界角", "feedback_correct": "正确！折射角=90度时的入射角叫临界角！", "feedback_wrong": "不对哦，想想折射角=90度时的入射角叫什么？"},
-    "q4_1": {"correct": "逐渐消失", "feedback_correct": "很好！你观察到折射光变弱了！", "feedback_wrong": "再仔细观察一下折射光的强度变化？"},
-    "q5_1": {"correct": "光全部反射回水中", "feedback_correct": "完全正确！这就是全反射现象！", "feedback_wrong": "注意看反射光——它变亮了！说明光反射回去了！"},
+    # stage 1: 能看到几条光线
+    "q_line_count": {
+        "correct": "3条",
+        "feedback_correct": "答对！3条：入射光、反射光、折射光。折射就是光从水进入空气时方向改变！试试拖大角度观察！",
+        "feedback_wrong": "再仔细看！应该有3条：入射光、反射光、折射光。试试拖动滑块！"
+    },
+    # stage 2: 预测挑战 - 折射光变弱还是变强
+    "q_prediction": {
+        "correct": "逐渐消失",
+        "feedback_correct": "你预测对了！折射光越来越弱，继续增大角度验证！",
+        "feedback_wrong": "再仔细观察折射光的强度变化，注意看亮度！"
+    },
+    # stage 3: 折射规律
+    "q_refraction_rule": {
+        "correct": "折射角会变大",
+        "feedback_correct": "答对！折射规律：入射角越大，折射角也越大，这就是折射定律！继续增大角度，快到临界角了！",
+        "feedback_wrong": "入射角越大，折射角也越大——想想筷子插进水里的样子！"
+    },
+    # stage 4: 临界角
+    "q_critical_angle": {
+        "correct": "临界角",
+        "feedback_correct": "正确！折射角=90度时的入射角叫临界角！继续增大角度超过48度看看！",
+        "feedback_wrong": "当折射角刚好等于90度时，这时的入射角叫做临界角！"
+    },
+    # stage 5: 全反射
+    "q_total_reflection": {
+        "correct": "光全部反射回水中",
+        "feedback_correct": "完全正确！这就是全反射现象！折射光完全消失，所有光反射回水中！",
+        "feedback_wrong": "注意看反射光——它变亮了！说明光反射回去了！"
+    },
+    # 验证题: 全反射条件
+    "q_verify": {
+        "correct": "光从水射向空气，入射角>=临界角",
+        "feedback_correct": "完全正确！全反射的两个条件缺一不可！",
+        "feedback_wrong": "全反射条件：光从水射向空气，且入射角大于等于临界角！"
+    },
+    # 古币题
+    "q_coin": {
+        "correct": "大于临界角",
+        "feedback_correct": "对了！从侧面看角度大，超过临界角，光全反射出不来——古币消失！",
+        "feedback_wrong": "从侧面看时角度大，超过临界角，光全反射出不来！"
+    },
 }
 
 
@@ -137,7 +213,6 @@ def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
         print(f"[MiniMax] 响应状态码: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            print(f"[MiniMax] 响应体: {data}")
             choices = data.get("choices", [])
             if choices:
                 msg = choices[0].get("message", {})
@@ -201,23 +276,36 @@ SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯
 
 
 # ========== /chat 接口 ==========
+# 方案A：预设问题 + 预设评判，不调MiniMax生成问题
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     qid = req.question_id
     selected = req.selected_option
     wrong_count = req.wrong_count
 
-    # 有 question_id 走预设评判
+    # 情况1：有 question_id，要获取预设问题和选项（没有 selected_option）
+    if qid and qid in PRESET_QUESTIONS and not selected:
+        preset_q = PRESET_QUESTIONS[qid]
+        return ChatResponse(
+            correct=False,
+            feedback="",
+            next_action="show_options",
+            question=preset_q["question"],
+            options=preset_q["options"]
+        )
+
+    # 情况2：有 question_id + selected_option，进行预设评判
     if qid and qid in PRESET_ANSWERS:
         preset = PRESET_ANSWERS[qid]
         correct = (selected == preset["correct"])
 
         if correct:
             feedback = preset["feedback_correct"]
-            if qid in ("q5_1",):
+            if qid == "q_total_reflection":
                 return ChatResponse(correct=True, feedback=feedback, next_action="discovery_card")
             return ChatResponse(correct=True, feedback=feedback, next_action="advance")
 
+        # 答错了
         feedback = preset["feedback_wrong"]
         if wrong_count >= 3 and qid in LECTURES:
             feedback = LECTURES[qid]
@@ -228,27 +316,6 @@ def chat(req: ChatRequest):
             feedback = HINTS_LEVEL2[qid]
 
         return ChatResponse(correct=False, feedback=feedback, next_action="retry")
-
-    # 没有 question_id 或未知 question_id，调用 MiniMax AI 生成苏格拉底式反馈
-    if selected:
-        # 用专门的反馈 prompt，不走 SYSTEM_PROMPT
-        feedback_prompt = f"""玩家回答了：{selected}
-
-你的任务是：根据玩家的回答，给出一句简短的苏格拉底式追问或引导，帮助他们自己思考出正确答案。
-
-要求：
-1. 不直接告诉答案，用问题引导
-2. 不超过3句话，45字以内
-3. 语气像朋友聊天，不要像老师
-4. 如果回答接近正确，予以肯定并轻轻引导
-5. 如果回答完全不对，用问题指出思考方向"""
-        messages = [
-            {"role": "user", "content": feedback_prompt}
-        ]
-        ai_reply = call_minimax(messages, max_tokens=200)
-        if ai_reply and ai_reply.strip():
-            return ChatResponse(correct=False, feedback=ai_reply.strip(), next_action="retry")
-        return ChatResponse(correct=False, feedback="再想想看？", next_action="retry")
 
     return ChatResponse(correct=False, feedback="再想想看？", next_action="retry")
 

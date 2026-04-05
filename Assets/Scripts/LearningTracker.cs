@@ -33,6 +33,9 @@ public class LearningTracker : MonoBehaviour
     private float lastStagnantCheck = 0f;
     private bool stagnantAlertShown = false;
 
+    // 全局开关：开场阶段禁止 LearningTracker 发送数据
+    public static bool learningTrackerEnabled = false;
+
     void Start()
     {
         lastSendTime = Time.time;
@@ -95,7 +98,7 @@ public class LearningTracker : MonoBehaviour
 
             // 闲置超过阈值，且还没发过这次闲置的提示
             float idle = Time.time - lastActivityTime;
-            if (idle >= stagnantThreshold && !stagnantAlertShown)
+            if (learningTrackerEnabled && idle >= stagnantThreshold && !stagnantAlertShown)
             {
                 stagnantAlertShown = true;
                 Debug.Log("[LearningTracker] 玩家闲置超过" + stagnantThreshold + "秒，发送学习数据请求");

@@ -240,10 +240,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         stage = 1;
         Show(shanShanPanel);
+        LearningTracker.learningTrackerEnabled = true;  // 开启学习追踪
         StartCoroutine(ClearSession());
-        StartCoroutine(DelayDo(0.5f, () =>
-            StartCoroutine(CallShanShanApi("玩家刚进入实验，闪闪用轻松自然的语气打招呼并引导玩家点击开启入射光线按钮", 0))
-        ));
+        // 直接显示欢迎语，不需要调API
+        ShanShanSayLocal("嗨！我是闪闪！实验台准备好了，先点一下开启入射光线，看看会有什么发现吧！", true);
     }
 
     // ══════════════════════════════════════════
@@ -911,19 +911,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
     private int wrongAttempts = 0;  // 本题错了几次
 
     // AI生成问题+选项，并显示
+    // 方案A：发送 question_id，后端返回预设问题和选项
     IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
     {
         if (shanShanBusy) yield break;
         shanShanBusy = true;
         wrongAttempts = 0;
 
+        // 发送 question_id 获取预设问题和选项
         string body =
             "{\"session_id\":\"" + sessionId + "\"," +
-            "\"question\":\"" + EscapeJson(context) + "\"," +
-            "\"incident_angle\":" + currentIncidentAngle.ToString("F1") + "," +
-            "\"is_total_reflection\":" + (isTotalReflection ? "true" : "false") + "," +
-            "\"refract_angle\":" + currentRefractAngle.ToString("F1") + "," +
-            "\"exploration_stage\":" + stage + "}";
+            "\"question_id\":\"" + currentQuestionId + "\"}";
 
         using var req = new UnityWebRequest(shanShanServerUrl + "/chat", "POST");
         req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -936,6 +934,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
+            Debug.Log("[ShanShanAsk] 收到响应: " + json);
+
             // 解析 question 字段
             int qIdx = json.IndexOf("\"question\":\"");
             if (qIdx >= 0)
@@ -973,7 +973,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 if (options.Length > 0)
                 {
                     yield return new WaitForSeconds(1f);
-                    // 所有选项共用同一个callback：发给AI评判
                     System.Action[] cbs = new System.Action[options.Length];
                     for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
                     ShowChoiceBubble(options, cbs);
