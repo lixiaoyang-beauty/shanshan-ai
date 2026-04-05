@@ -9,59 +9,6 @@ using UnityEngine.Networking;
 
 public class Chapter3ExperimentManager : MonoBehaviour
 {
-    // ============================================================
-    // JSON 解析辅助（处理引号嵌套）
-    // ============================================================
-    static string JsonQuoteValue(string json, string key)
-    {
-        string marker = "\"" + key + "\":\"";
-        int ik = json.IndexOf(marker);
-        if (ik < 0) return "";
-        int start = ik + marker.Length;
-        int i = start;
-        while (i < json.Length)
-        {
-            if (json[i] == '\\' && i + 1 < json.Length && json[i + 1] == '"') { i += 2; continue; }
-            if (json[i] == '"') break;
-            i++;
-        }
-        return json.Substring(start, i - start);
-    }
-
-    static string[] JsonArray(string json, string key)
-    {
-        string marker = "\"" + key + "\":[";
-        int ik = json.IndexOf(marker);
-        if (ik < 0) return new string[0];
-        int arrStart = ik + marker.Length;
-        int depth = 1, i = arrStart + 1;
-        while (i < json.Length && depth > 0)
-        {
-            if (json[i] == '[') depth++;
-            else if (json[i] == ']') depth--;
-            i++;
-        }
-        string arrContent = json.Substring(arrStart + 1, i - arrStart - 2);
-        var result = new System.Collections.Generic.List<string>();
-        int j = 0;
-        while (j < arrContent.Length)
-        {
-            int q = arrContent.IndexOf('"', j);
-            if (q < 0) break;
-            int qe = q + 1;
-            while (qe < arrContent.Length)
-            {
-                if (arrContent[qe] == '\\' && qe + 1 < arrContent.Length && arrContent[qe + 1] == '"') { qe += 2; continue; }
-                if (arrContent[qe] == '"') break;
-                qe++;
-            }
-            result.Add(arrContent.Substring(q + 1, qe - q - 1));
-            j = qe + 1;
-            while (j < arrContent.Length && arrContent[j] != '"' && arrContent[j] != '[') j++;
-        }
-        return result.ToArray();
-    }
-
     [Header("── 对话框 ──")]
     public GameObject dialoguePanel;
     public TextMeshProUGUI speakerNameText;
@@ -286,7 +233,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         Show(shanShanPanel);
         StartCoroutine(ClearSession());
         StartCoroutine(DelayDo(0.5f, () =>
-            StartCoroutine(ShanShanAsk("玩家刚进入实验，闪闪打招呼并引导玩家点击开启入射光线按钮"))
+            StartCoroutine(CallShanShanApi("玩家刚进入实验，闪闪用轻松自然的语气打招呼并引导玩家点击开启入射光线按钮", 0))
         ));
     }
 
@@ -916,22 +863,48 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
-            Debug.Log("[ShanShanAsk] 原始JSON: " + json);
-
-            string question = JsonQuoteValue(json, "question");
-            string[] options = JsonArray(json, "options");
-
-            aiCurrentQuestion = question;
-            aiCurrentOptions = options;
-            ShanShanSayLocal(question, true);
-
-            if (options.Length > 0)
+            // 解析 question 字段
+            int qIdx = json.IndexOf("\"question\":\"");
+            if (qIdx >= 0)
             {
-                yield return new WaitForSeconds(1f);
-                System.Action[] cbs = new System.Action[options.Length];
-                for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
-                ShowChoiceBubble(options, cbs);
-            }
+                int qStart = qIdx + 12;
+                int qEnd = json.IndexOf("\"", qStart);
+                string question = qEnd > qStart ? json.Substring(qStart, qEnd - qStart) : "";
+
+                // 解析 options 字段
+                string[] options = new string[0];
+                int optIdx = json.IndexOf("\"options\":[");
+                if (optIdx >= 0)
+                {
+                    int arrStart = json.IndexOf("[", optIdx);
+                    int arrEnd = json.IndexOf("]", arrStart);
+                    if (arrEnd > arrStart)
+                    {
+                        string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
+                        string[] parts = arrStr.Split(new char[] { '"' });
+                        var optList = new System.Collections.Generic.List<string>();
+                        foreach (var p in parts)
+                        {
+                            string trimmed = p.Trim().Trim(',', ' ');
+                            if (!string.IsNullOrEmpty(trimmed) && trimmed != ",")
+                                optList.Add(trimmed);
+                        }
+                        options = optList.ToArray();
+                    }
+                }
+
+                aiCurrentQuestion = question;
+                aiCurrentOptions = options;
+                ShanShanSayLocal(question, true);
+
+                if (options.Length > 0)
+                {
+                    yield return new WaitForSeconds(1f);
+                    // 所有选项共用同一个callback：发给AI评判
+                    System.Action[] cbs = new System.Action[options.Length];
+                    for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
+                    ShowChoiceBubble(options, cbs);
+                }
                 shanShanBusy = false;
                 onReplyDone?.Invoke();
                 yield break;
@@ -980,7 +953,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         try
         {
-            feedback = JsonQuoteValue(json, "feedback");
+            int fbIdx = json.IndexOf("\"feedback\":\"");
+            if (fbIdx >= 0) {
+                int fbStart = fbIdx + 12;
+                int fbEnd = json.IndexOf("\"", fbStart);
+                feedback = fbEnd > fbStart ? json.Substring(fbStart, fbEnd - fbStart) : "";
+            }
 
             int corrIdx = json.IndexOf("\"correct\":");
             if (corrIdx >= 0) {
@@ -996,12 +974,32 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 nextAction = naEnd > naStart ? json.Substring(naStart, naEnd - naStart) : "";
             }
 
-            question = JsonQuoteValue(json, "question");
-            options = JsonArray(json, "options");
+            int qIdx = json.IndexOf("\"question\":\"");
+            if (qIdx >= 0) {
+                int qStart = qIdx + 12;
+                int qEnd = json.IndexOf("\"", qStart);
+                question = qEnd > qStart ? json.Substring(qStart, qEnd - qStart) : "";
+            }
+
+            int optIdx = json.IndexOf("\"options\":[");
+            if (optIdx >= 0) {
+                int arrStart = json.IndexOf("[", optIdx);
+                int arrEnd = json.IndexOf("]", arrStart);
+                if (arrEnd > arrStart) {
+                    string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
+                    string[] parts = arrStr.Split(new char[] { '"' });
+                    var optList = new System.Collections.Generic.List<string>();
+                    foreach (var p in parts) {
+                        string trimmed = p.Trim().Trim(',', ' ');
+                        if (!string.IsNullOrEmpty(trimmed) && trimmed != ",")
+                            optList.Add(trimmed);
+                    }
+                    options = optList.ToArray();
+                }
+            }
         }
         catch { }
 
-        Debug.Log($"[ProcessAI] feedback={feedback}, correct={correct}, nextAction={nextAction}, question={question}, options count={options.Length}");
         ShanShanSayLocal(feedback, true);
         lastSelectedOption = "";
 
@@ -1105,13 +1103,21 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
-            string replyText = JsonQuoteValue(json, "question");
-            if (!string.IsNullOrEmpty(replyText))
+            // 新格式：从 question 字段获取回复
+            int idx = json.IndexOf("\"question\":\"");
+            if (idx >= 0)
             {
-                ShanShanSayLocal(replyText, true);
-                yield return new WaitForSeconds(Mathf.Max(1f, replyText.Length * 0.04f + 0.5f));
-                onReplyDone?.Invoke();
-                yield break;
+                int s = idx + 12;
+                int e = json.IndexOf("\"", s);
+                if (e > s)
+                {
+                    string replyText = json.Substring(s, e - s);
+                    ShanShanSayLocal(replyText, true);
+                    float delay = Mathf.Max(1f, replyText.Length * 0.04f + 0.5f);
+                    yield return new WaitForSeconds(delay);
+                    onReplyDone?.Invoke();
+                    yield break;
+                }
             }
         }
         else
