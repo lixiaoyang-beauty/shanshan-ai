@@ -94,6 +94,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
     private GameObject bubbleContainer;
     private bool waitingForChoice = false;  // 等待玩家选择时暂停提示
 
+    // 独立按钮（继续探索/继续按钮/go按钮等）
+    private List<GameObject> extraButtons = new List<GameObject>();
+
     // Slider锁定
     private bool sliderLocked = false;
 
@@ -473,9 +476,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
     void ShowPredictionContinueButton()
     {
         // 继续探索按钮：解锁slider，进入下一阶段
-        MakeActionButton("继续探索", CYAN,
+        var btn = MakeActionButton("继续探索", CYAN,
             () => { UnlockSlider(); ClearBubbles(); },
             V2(0.3f, 0.02f), V2(0.7f, 0.12f));
+        if (btn != null) extraButtons.Add(btn);
     }
 
     // ══════════════════════════════════════════
@@ -817,6 +821,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (bubbleContainer != null) Destroy(bubbleContainer);
         bubbleContainer = null;
+        // 删除所有独立按钮（继续探索/继续/go等）
+        foreach (var btn in extraButtons)
+        {
+            if (btn != null) Destroy(btn);
+        }
+        extraButtons.Clear();
         waitingForChoice = false;  // 恢复idle提示
         idleTimer = 0f;
     }
@@ -1157,9 +1167,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // 第三次答错后显示继续按钮，点击解锁滑块
     void ShowLectureContinueButton()
     {
-        MakeActionButton("继续探索", CYAN,
+        var btn = MakeActionButton("继续探索", CYAN,
             () => { UnlockSlider(); ClearBubbles(); },
             V2(0.3f, 0.02f), V2(0.7f, 0.12f));
+        if (btn != null) extraButtons.Add(btn);
     }
 
     IEnumerator AiMessageDoneDelay(float delay, System.Action onDone)
