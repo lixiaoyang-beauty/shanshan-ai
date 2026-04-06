@@ -1038,6 +1038,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         catch { }
 
+        // 预测挑战：跳过后端feedback，直接显示自定义消息+继续按钮
+        if (currentQuestionId == "q_prediction")
+        {
+            ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！记得要仔细观察折射光的强度变化噢~", true);
+            StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
+            return;
+        }
+
         ShanShanSayLocal(feedback, true);
         lastSelectedOption = "";
 
@@ -1061,6 +1069,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (nextAction == "advance" || (correct && string.IsNullOrEmpty(nextAction)))
         {
             AudioManager.PlayCorrect();
+
+            // 预测挑战：无论对错都直接显示继续按钮
+            if (currentQuestionId == "q_prediction")
+            {
+                StartCoroutine(DelayDo(1f, () => {
+                    ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！记得要仔细观察折射光的强度变化噢~", true);
+                    StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
+                }));
+                return;
+            }
+
             UnlockSlider();  // 答对了，解锁滑块
             if (!string.IsNullOrEmpty(question) && options.Length > 0)
             {
@@ -1078,6 +1097,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
         AudioManager.PlayWrong();
         wrongAttempts++;
         learningTracker?.OnAnswerRecorded("ai_wrong");
+
+        // 预测挑战：无论对错都直接显示继续按钮，不重试
+        if (currentQuestionId == "q_prediction")
+        {
+            StartCoroutine(DelayDo(1.5f, () => {
+                ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！记得要仔细观察折射光的强度变化噢~", true);
+                StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
+            }));
+            return;
+        }
+
         if (!string.IsNullOrEmpty(question) && options.Length > 0)
         {
             aiCurrentQuestion = question;
