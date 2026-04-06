@@ -465,58 +465,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         stage = 3;
         idleTimer = 0f; hintLevel = -1;
-        if (correct)
-        {
-            questionWrongCount["q4_1"] = 0;
-            UnlockSlider();
-            StartCoroutine(CallShanShanApi("玩家预测折射光会消失，猜对了方向！请鼓励他继续增大角度验证", 3));
-        }
-        else
-        {
-            ShanShanSayLocal(reply);
-            learningTracker?.OnAnswerRecorded("prediction");
-            // 答错了，给一次重选机会
-            StartCoroutine(DelayDo(1.5f, ShowPredictionRetryBubble));
-        }
+        // 无论对错，都继续，给统一引导语+继续按钮
+        ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！", true);
+        StartCoroutine(DelayDo(1f, () => ShowPredictionContinueButton()));
     }
 
-    void ShowPredictionRetryBubble()
+    void ShowPredictionContinueButton()
     {
-        // 直接显示重试气泡，不走ShanShanAsk（避免question_id为空）
-        ShowChoiceBubble(
-            new[]{ "变得更强", "逐渐消失", "方向不变" },
-            new System.Action[]{
-                () => OnPredictionSecond(false),
-                () => OnPredictionSecond(true),
-                () => OnPredictionSecond(false)
-            });
-    }
-
-    void OnPredictionSecond(bool correct)
-    {
-        ClearBubbles();
-        if (correct)
-        {
-            questionWrongCount["q4_1"] = 0;
-            UnlockSlider();
-            StartCoroutine(ShanShanAsk("玩家答对了折射光变弱，鼓励他继续增大角度"));
-            StartCoroutine(CallShanShanApi("玩家发现折射光逐渐消失，正确预测折射规律，请鼓励他继续增大角度接近临界角", 3));
-        }
-        else
-        {
-            if (!questionWrongCount.ContainsKey("q4_1")) questionWrongCount["q4_1"] = 0;
-            questionWrongCount["q4_1"]++;
-            if (questionWrongCount["q4_1"] >= 3)
-            {
-                ShanShanSayLocal("随着入射角增大，折射光越来越暗，最后几乎看不见了——说明折射光在变弱。继续探索吧！");
-                StartCoroutine(DelayDo(1.5f, () => ShowLectureContinueButton()));
-            }
-            else
-            {
-                StartCoroutine(ShanShanAsk("玩家答错了折射光强度变化，引导他继续增大角度观察"));
-                StartCoroutine(CallShanShanApi("玩家预测折射光方向或强度变化，继续引导他观察并增大角度", 3));
-            }
-        }
+        // 继续探索按钮：解锁slider，进入下一阶段
+        MakeActionButton("继续探索", CYAN,
+            () => { UnlockSlider(); ClearBubbles(); },
+            V2(0.3f, 0.02f), V2(0.7f, 0.12f));
     }
 
     // ══════════════════════════════════════════
