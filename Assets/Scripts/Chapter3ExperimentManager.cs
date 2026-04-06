@@ -216,8 +216,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void GiveHint(int level)
     {
+        // 闲置提示不走预设问题流程，用 CallShanShanApi 调 MiniMax
         string context = $"玩家在阶段{stage}停留太久，hint等级{level}，当前角度{currentIncidentAngle:.1f}度，生成一句简短提示引导玩家继续探索";
-        StartCoroutine(ShanShanAsk(context));
+        StartCoroutine(CallShanShanApi(context, stage));
     }
 
     // ══════════════════════════════════════════
@@ -455,6 +456,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
+        currentQuestionId = "q_prediction";
         StartCoroutine(ShanShanAsk("玩家接近临界角（47度以上），折射光越来越弱，继续增大角度会发生什么？选项：变得更强|逐渐消失|方向不变"));
     }
 
@@ -480,15 +482,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowPredictionRetryBubble()
     {
-        StartCoroutine(ShanShanAsk("玩家预测折射光会变强，引导他再仔细观察折射光强度变化", () => {
-            ShowChoiceBubble(
-                new[]{ "变得更强", "逐渐消失", "方向不变" },
-                new System.Action[]{
-                    () => OnPredictionSecond(false),
-                    () => OnPredictionSecond(true),
-                    () => OnPredictionSecond(false)
-                });
-        }));
+        // 直接显示重试气泡，不走ShanShanAsk（避免question_id为空）
+        ShowChoiceBubble(
+            new[]{ "变得更强", "逐渐消失", "方向不变" },
+            new System.Action[]{
+                () => OnPredictionSecond(false),
+                () => OnPredictionSecond(true),
+                () => OnPredictionSecond(false)
+            });
     }
 
     void OnPredictionSecond(bool correct)
@@ -537,11 +538,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
     IEnumerator TotalReflectionSequence()
     {
         yield return new WaitForSeconds(0.5f);
+        currentQuestionId = "q_total_reflection";
         StartCoroutine(ShanShanAsk("全反射发生了！折射光消失了！用惊讶语气问玩家光去哪了。选项：光消失了|光全部反射回水中|光被水吸收了"));
     }
 
     void ShowTotalReflectionRetryBubble()
     {
+        currentQuestionId = "q_total_reflection";
         StartCoroutine(ShanShanAsk("玩家答错了折射光消失问题，引导他再想想光去了哪里", () => {
             ShowChoiceBubble(
                 new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
@@ -573,6 +576,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowTotalReflectionThirdBubble()
     {
+        currentQuestionId = "q_total_reflection";
         StartCoroutine(ShanShanAsk("玩家需要判断光去哪了，引导他注意观察反射光变亮，提示光全部反射回去了", () => {
             ShowChoiceBubble(
                 new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
@@ -655,6 +659,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void ShowVerifyPanel()
     {
+        currentQuestionId = "q_verify";
         StartCoroutine(ShanShanAsk("进入全反射条件选择题，让玩家选出正确的全反射条件", () => {
             ShowChoiceBubble(
                 new[]{
@@ -707,7 +712,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            StartCoroutine(ShanShanAsk("玩家答错了古币问题，解释从侧面看角度大导致全反射光出不来，引导再想"));
             learningTracker?.OnAnswerRecorded("coin_angle");
             // 答错了，给第二次选择机会
             StartCoroutine(DelayDo(1.5f, ShowCoinRetryBubble));
@@ -716,6 +720,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowCoinRetryBubble()
     {
+        currentQuestionId = "q_coin";
         StartCoroutine(ShanShanAsk("问玩家从侧面观察古币时，入射角大于还是小于临界角", () => {
             ShowChoiceBubble(
                 new[]{ "大于临界角", "小于临界角" },
@@ -916,7 +921,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (shanShanBusy) yield break;
         shanShanBusy = true;
-        wrongAttempts = 0;
+        // 不重置 wrongAttempts，保持计数连续性
 
         // 发送 question_id 获取预设问题和选项
         string body =
