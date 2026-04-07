@@ -688,24 +688,30 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
-        wrongAttempts = 0;  // 每道新问题开始时重置错题计数
+        wrongAttempts = 0;
         currentQuestionId = "q_prediction";
-        StartCoroutine(ShanShanAsk("折射光越来越弱了，用好奇的语气问玩家：继续增大角度，折射光会怎样？选项：变得更强|逐渐消失|方向不变"));
+        StartCoroutine(ShanShanAsk("折射光越来越弱了，用好奇的语气问玩家：继续增大角度，折射光会怎样？", () => {
+            ShowChoiceBubble(
+                new[]{ "变得更强", "逐渐消失", "方向不变" },
+                new System.Action[]{
+                    () => OnPredictionSelected(0),
+                    () => OnPredictionSelected(1),
+                    () => OnPredictionSelected(2)
+                });
+        }));
     }
 
-    void OnPrediction(bool correct, string reply)
+    void OnPredictionSelected(int choice)
     {
         ClearBubbles();
         stage = 3;
         idleTimer = 0f; hintLevel = -1;
-        // 无论对错，都继续，给统一引导语+继续按钮
         ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！", true);
-        StartCoroutine(DelayDo(1f, () => ShowPredictionContinueButton()));
+        StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
     }
 
     void ShowPredictionContinueButton()
     {
-        // 继续探索按钮：推进阶段到3，解锁slider
         var btn = MakeActionButton("继续探索", CYAN,
             () => { stage = 3; idleTimer = 0f; hintLevel = -1; UnlockSlider(); ClearBubbles(); },
             V2(0.3f, 0.02f), V2(0.7f, 0.12f));
