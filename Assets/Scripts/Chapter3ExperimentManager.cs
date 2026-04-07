@@ -358,7 +358,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         switch (qid)
         {
             case "q_line_count":       return "咦，你再仔细看看～光线碰到水面时，是不是同时向好几个方向跑去了？";
-            case "q_refraction_rule":  return "入射角变大时，折射光是越来越"远离"还是越来越"靠近"水面呢？";
+            case "q_refraction_rule":  return "入射角变大时，折射光是越来越「远离」还是越来越「靠近」水面呢？";
             case "q_critical_angle":  return "折射角变成90度时的入射角，有个特别的名字，你知道是什么吗？";
             case "q_prediction":      return "折射光越来越暗了——光慢慢消失了吗？还是去了别的地方？";
             case "q_total_reflection": return "折射光消失了，但反射光那边……你有没有注意到什么不一样？";
@@ -446,10 +446,32 @@ public class Chapter3ExperimentManager : MonoBehaviour
             V2(0f, 0.10f), V2(1f, 0.72f), V2(20, 8), V2(-20, -8),
             body, 20, CREAM, TextAlignmentOptions.Top, false);
 
-        // 关闭按钮
+        // 左：重新探索按钮
+        MakeActionButton("重新探索试试", CYAN,
+            () => {
+                Destroy(overlay);
+                // 重置实验状态
+                if (angleSlider != null) angleSlider.value = 15f;
+                currentIncidentAngle = 15f;
+                currentRefractAngle = 0f;
+                isTotalReflection = false;
+                stage = 1;
+                stage3Triggered = false;
+                predictionMade = false;
+                verifyDone = false;
+                refractionRuleAnswered = false;
+                wrongAttempts = 0;
+                questionWrongCount.Clear();
+                learningTracker?.Reset();
+                ClearBubbles();
+                UnlockSlider();
+            },
+            V2(0.02f, 0.02f), V2(0.49f, 0.09f), panel.transform);
+
+        // 右：继续回博物馆按钮
         MakeActionButton("继续回博物馆破案！", GOLD,
             () => { Destroy(overlay); StartAllyEnding(); },
-            V2(0.2f, 0.02f), V2(0.8f, 0.09f), panel.transform);
+            V2(0.51f, 0.02f), V2(0.98f, 0.09f), panel.transform);
 
         StartCoroutine(PopIn(pRt));
     }
@@ -1386,12 +1408,11 @@ public class Chapter3ExperimentManager : MonoBehaviour
             AudioManager.PlayWrong();
             wrongAttempts++;
             learningTracker?.OnAnswerRecorded("ai_wrong");
-            // 显示简短反馈气泡（答错了）
+            // 立即显示 MiniMax 个性化追问（分层因 wrong_count 而不同）
             ShanShanSayLocal(feedback, true);
-            // 1.2秒后显示"原问题 + 💡 追问"大气泡（让玩家同时看到问题和追问）
-            // aiCurrentQuestion 在 ShanShanAsk 回调中已设置，这里直接使用
+            // 1.5秒后显示原问题提醒气泡
             if (!string.IsNullOrEmpty(question))
-                StartCoroutine(DelayDo(1.2f, () => ShanShanSayLocal("回顾：" + aiCurrentQuestion + "\n💡 " + question, true)));
+                StartCoroutine(DelayDo(1.5f, () => ShanShanSayLocal("回顾：" + question, true)));
             // 3秒后显示同一道题的选项
             if (options != null && options.Length > 0)
                 StartCoroutine(DelayDo(3f, () => ShowAIOptionBubble(options)));
@@ -1413,10 +1434,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             case "q_line_count":     return "太棒了！入射光、反射光、折射光——三条全被你找到了！你注意到没有，反射光和折射光是一起出现的哦～继续拖大角度，看看会有什么新发现！";
             case "q_refraction_rule":return "没错！入射角越大，折射角也跟着变大～这就是折射定律！想象一下筷子插进水里的样子，是不是也是这样的？好，继续增大角度，快要有神奇的事要发生了……";
-            case "q_critical_angle": return "答对了！这个特殊角度就叫做"临界角"！好有意思的名字对不对～来，现在把角度调到超过临界角，看看会发生什么！";
-            case "q_total_reflection":return "哇！太神奇了！你发现了"全反射"！折射光完全消失了——但等等，光真的不见了吗？你仔细看反射光那边，是不是反而变亮了？光其实全部跑回水里去了！";
+            case "q_critical_angle": return "答对了！这个特殊角度就叫做「临界角」！好有意思的名字对不对～来，现在把角度调到超过临界角，看看会发生什么！";
+            case "q_total_reflection":return "哇！太神奇了！你发现了「全反射」！折射光完全消失了——但等等，光真的不见了吗？你仔细看反射光那边，是不是反而变亮了？光其实全部跑回水里去了！";
             case "q_verify":         return "完全正确！两个条件缺一不可——光要从水射向空气，而且角度要超过临界角！你记住了吗？好，现在我们把学到的一切和古币消失的谜题联系起来！";
-            case "q_coin":           return "叮——谜底揭开了！从侧面看时入射角非常大，超过了临界角，光发生全反射全部反射回水中，根本出不来，所以古币就"消失"了！哇，太厉害了！";
+            case "q_coin":           return "叮——谜底揭开了！从侧面看时入射角非常大，超过了临界角，光发生全反射全部反射回水中，根本出不来，所以古币就「消失」了！哇，太厉害了！";
             default:                 return "太棒了！继续探索吧，一定会有更多发现的！";
         }
     }

@@ -444,12 +444,13 @@ def chat(req: ChatRequest):
         if not socratic_question:
             socratic_question = f"你选了「{selected}」——再观察一下，现象是不是和你想的不太一样？"
 
-        # 返回苏格拉底追问 + 同一道题的选项，让玩家在同一个问题上下文里重试
+        # 立即显示的 feedback = MiniMax 个性化追问（分层因 wrong_count 而不同）
+        # 1.2秒后气泡显示的 question = 原问题（帮玩家回忆题目）
         return ChatResponse(
             correct=False,
-            feedback=feedback,
+            feedback=socratic_question,
             next_action="socratic_retry",
-            question=socratic_question,
+            question=preset.get("question", ""),
             options=PRESET_QUESTIONS[qid].get("options") if qid in PRESET_QUESTIONS else preset.get("options", [])
         )
 
