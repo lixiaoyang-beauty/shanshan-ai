@@ -1364,6 +1364,23 @@ public class Chapter3ExperimentManager : MonoBehaviour
             return;
         }
 
+        // 苏格拉底追问 → MiniMax个性化追问 + 同一道题的选项（保持上下文）
+        if (nextAction == "socratic_retry")
+        {
+            AudioManager.PlayWrong();
+            wrongAttempts++;
+            learningTracker?.OnAnswerRecorded("ai_wrong");
+            // 显示简短反馈气泡（答错了）
+            ShanShanSayLocal(feedback, true);
+            // 1秒后显示苏格拉底追问气泡（个性化引导，和选项同属一个问题上下文）
+            if (!string.IsNullOrEmpty(question))
+                StartCoroutine(DelayDo(1f, () => ShanShanSayLocal("💡 " + question, true)));
+            // 2.5秒后显示同一道题的选项
+            if (options != null && options.Length > 0)
+                StartCoroutine(DelayDo(2.5f, () => ShowAIOptionBubble(options)));
+            return;
+        }
+
         // 答错（第1次或第2次）→ 分层提示 + 重新显示相同选项
         AudioManager.PlayWrong();
         wrongAttempts++;

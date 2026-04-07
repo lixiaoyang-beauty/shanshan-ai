@@ -31,12 +31,18 @@ class ChatRequest(BaseModel):
     selected_option: str = ""
     wrong_count: int = 0
     mode: str = "preset"  # "preset" / "free" / "hint"
+    # ShanShanAsk 会发送以下字段
+    question: str = ""             # 当前上下文/情境描述
+    incident_angle: float = 0
+    is_total_reflection: bool = False
+    refract_angle: float = 0
+    exploration_stage: int = 0
 
 
 class ChatResponse(BaseModel):
     correct: bool = False
     feedback: str = ""
-    next_action: str = ""  # "retry" / "advance" / "discovery_card" / "lecture"
+    next_action: str = ""  # "retry" / "advance" / "discovery_card" / "lecture" / "socratic_retry"
     question: Optional[str] = None
     options: Optional[List[str]] = None
 
@@ -116,6 +122,52 @@ LECTURES = {
 
 # ========== 预设问题和选项 ==========
 # 每个问题对应的问题文本和选项（方案A：后端直接返回，不调MiniMax）
+
+# 各问题的苏格拉底追问策略（供 MiniMax 生成个性化追问用）
+QUESTION_GUIDANCE = {
+    "q_line_count": {
+        "misconception_map": {
+            "1条": "误以为只有入射光，忽略了反射光和折射光也是光线",
+            "2条": "混淆了入射光和反射光，或漏掉了折射光",
+        },
+        "socratic_angle": "从光源到水面，光是一起走还是分开走了？"
+    },
+    "q_refraction_rule": {
+        "misconception_map": {
+            "折射角会变小": "误以为入射角越大折射角越小，和筷子插进水里的现象混淆",
+            "折射角不变": "不理解折射角会随入射角变化而变化",
+        },
+        "socratic_angle": "对比一下：角度小的时候折射光偏向哪边，角度大的时候偏向哪边？"
+    },
+    "q_critical_angle": {
+        "misconception_map": {
+            "折射角": "混淆了入射角和折射角的定义",
+            "反射角": "混淆了反射和折射的不同概念",
+        },
+        "socratic_angle": "折射角变成90度（贴着水面走）时的入射角，有特别的名字——叫什么？"
+    },
+    "q_total_reflection": {
+        "misconception_map": {
+            "光消失了": "误以为光凭空消失，没有考虑到光的反射",
+            "光被水吸收了": "误以为光被介质吸收了",
+        },
+        "socratic_angle": "注意看反射光——它是不是变亮了？光去哪了？"
+    },
+    "q_verify": {
+        "misconception_map": {
+            "只要角度够大": "忽略了光要从哪个介质到哪个介质",
+            "空气到水": "搞反了全反射的方向条件",
+        },
+        "socratic_angle": "回忆一下：光从水里射向空气容易全反射，还是从空气射向水？"
+    },
+    "q_coin": {
+        "misconception_map": {
+            "小于临界角": "误以为从侧面看入射角小",
+        },
+        "socratic_angle": "从侧面看时，光线要倾斜很大角度出去，入射角是大还是小？"
+    },
+}
+
 PRESET_QUESTIONS = {
     "q_line_count": {
         "question": "哇，你看到光线了！你能观察到几条光线呀？",
@@ -311,17 +363,69 @@ def chat(req: ChatRequest):
                 return ChatResponse(correct=True, feedback=feedback, next_action="discovery_card")
             return ChatResponse(correct=True, feedback=feedback, next_action="advance")
 
-        # 答错了
+        # 答错了 → MiniMax 个性化苏格拉底追问
         feedback = preset["feedback_wrong"]
+
+        # 第3次错 → 强制讲解，不再追问
         if wrong_count >= 3 and qid in LECTURES:
             feedback = LECTURES[qid]
             return ChatResponse(correct=False, feedback=feedback, next_action="lecture")
-        elif wrong_count == 1 and qid in HINTS_LEVEL1:
-            feedback = HINTS_LEVEL1[qid]
-        elif wrong_count == 2 and qid in HINTS_LEVEL2:
-            feedback = HINTS_LEVEL2[qid]
 
-        return ChatResponse(correct=False, feedback=feedback, next_action="retry")
+        # 调用 MiniMax 生成针对这道题、这个具体错误选项的个性化追问
+        guidance = QUESTION_GUIDANCE.get(qid, {})
+        misconception_map = guidance.get("misconception_map", {})
+        socratic_angle = guidance.get("socratic_angle", "仔细观察实验台，答案就在现象里！")
+        misconception_text = misconception_map.get(selected, "对折射/反射规律有误解")
+
+        # 语气策略：错1次温和引导，错2次稍微直接
+        if wrong_count == 1:
+            tone_hint = "语气温和，像朋友聊天，用问句引导，不要给答案"
+        else:
+            tone_hint = "语气稍微直接一点，但仍然用问句，可以稍微给点方向提示"
+
+        analysis_content = f"""【玩家答题情况】
+        当前问题：{preset.get('question', '')}
+        玩家选择了：{selected}  ← 这是错的
+        正确答案：{preset.get('correct', '')}
+        玩家的迷思概念：{misconception_text}
+        追问角度提示：{socratic_angle}
+        本题已错{wrong_count}次
+
+        你的任务：生成一句苏格拉底式追问（40字以内），直接针对玩家选的这个具体错误选项。不要给答案，用问句引导他自己发现。
+
+        回复格式（严格JSON，不要其他文字）：
+        {{"socratic":"一句苏格拉底追问，不超过40字，用问句结尾"}}
+
+        {tone_hint}，不超过45字。"""
+
+        messages = [
+            {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
+            {"role": "user", "name": "闪闪", "content": analysis_content}
+        ]
+
+        ai_message = call_minimax(messages, max_tokens=150)
+
+        socratic_question = ""
+        if ai_message and ai_message.strip():
+            try:
+                import json
+                data = json.loads(ai_message)
+                socratic_question = data.get("socratic", "")[:50]
+            except:
+                socratic_question = ai_message.strip()[:50]
+
+        # MiniMax 失败时，用预设追问兜底
+        if not socratic_question:
+            socratic_question = f"你选了「{selected}」——再观察一下，现象是不是和你想的不太一样？"
+
+        # 返回苏格拉底追问 + 同一道题的选项，让玩家在同一个问题上下文里重试
+        return ChatResponse(
+            correct=False,
+            feedback=feedback,
+            next_action="socratic_retry",
+            question=socratic_question,
+            options=PRESET_QUESTIONS[qid].get("options") if qid in PRESET_QUESTIONS else preset.get("options", [])
+        )
 
     return ChatResponse(correct=False, feedback="再想想看？", next_action="retry")
 
