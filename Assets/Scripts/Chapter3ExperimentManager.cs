@@ -462,7 +462,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 refractionRuleAnswered = false;
                 wrongAttempts = 0;
                 questionWrongCount.Clear();
-                learningTracker?.Reset();
                 ClearBubbles();
                 UnlockSlider();
             },
