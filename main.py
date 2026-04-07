@@ -44,17 +44,17 @@ class ChatResponse(BaseModel):
 class LearningDataRequest(BaseModel):
     session_id: str = "default"
     question_id: str = ""
-    wrong_answer: str = ""
-    wrong_count: int = 0
-    exploration_stage: int
-    current_angle: float
-    idle_time: float
+    selected_option: str = ""       # 玩家选了什么
+    correct_answer: str = ""        # 正确答案是什么
+    wrong_count: int = 0            # 本题错了几次
+    exploration_stage: int = 0
+    current_angle: float = 0.0
+    idle_time: float = 0.0
 
 
 class LearningDataResponse(BaseModel):
     status: str
-    intervention: str
-    message: Optional[str] = None
+    socratic_question: Optional[str] = None  # 苏格拉底追问（AI生成）
 
 
 # ========== 迷思概念映射 ==========
@@ -334,43 +334,39 @@ def receive_learning_data(req: LearningDataRequest):
 
     trajectory = learning_sessions[req.session_id]
 
-    # 记录迷思概念
-    if req.wrong_answer and req.question_id in MISCONCEPTIONS:
-        misconception = MISCONCEPTIONS[req.question_id].get(req.wrong_answer, req.wrong_answer)
-        trajectory.add_wrong(req.question_id, req.wrong_answer, misconception)
+    # 记录错题
+    if req.question_id and req.selected_option:
+        misconception = ""
+        if req.question_id in MISCONCEPTIONS and req.selected_option in MISCONCEPTIONS[req.question_id]:
+            misconception = MISCONCEPTIONS[req.question_id][req.selected_option]
+        trajectory.add_wrong(req.question_id, req.selected_option, misconception)
 
-    # 构建苏格拉底追问
-    analysis_content = f"""【玩家学习状态】
-问题ID：{req.question_id}
-当前阶段：{req.exploration_stage}
-错误次数：{req.wrong_count}
-错误类型：{req.wrong_answer}
-闲置时间：{req.idle_time:.1f}秒
+    # 构建苏格拉底追问（AI分析玩家迷思概念）
+    analysis_content = f"""【玩家答题情况】
+探索阶段：{req.exploration_stage}
+当前入射角：{req.current_angle:.1f}度
+本题错了几次：{req.wrong_count}次
+玩家选择了：{req.selected_option}
+正确答案：{req.correct_answer}
 
-你的任务是分析玩家的迷思概念，生成一条苏格拉底式追问，帮助他们自己思考出正确答案。
-
-要求：
-1. 不直接给答案，用问题引导
-2. 不超过3句话，45字以内
-3. 语气像朋友聊天，不要像老师
-4. 每次追问要针对玩家的具体错误原因"""
+你的任务：根据玩家选择的答案，分析他的迷思概念是什么，生成一句苏格拉底式追问来引导他自己想通。不超过20字，像朋友聊天，不要直接给答案。"""
 
     messages = [
         {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
         {"role": "user", "name": "闪闪", "content": analysis_content}
     ]
 
-    ai_message = call_minimax(messages, max_tokens=500)
+    ai_message = call_minimax(messages, max_tokens=100)
 
+    socratic = ""
     if ai_message and ai_message.strip():
         trajectory.add_socratic(ai_message)
-        return LearningDataResponse(
-            status="received",
-            intervention="socratic_question",
-            message=ai_message.strip()
-        )
+        socratic = ai_message.strip()[:50]
 
-    return LearningDataResponse(status="received", intervention="none", message=None)
+    return LearningDataResponse(
+        status="received",
+        socratic_question=socratic if socratic else None
+    )
 
 
 @app.get("/learning-trajectory/{session_id}")
@@ -378,6 +374,19 @@ def get_trajectory(session_id: str):
     if session_id not in learning_sessions:
         return {"error": "session not found"}
     return learning_sessions[session_id].to_dict()
+
+
+@app.get("/trajectory/summary/{session_id}")
+def get_summary(session_id: str):
+    """返回迷思概念摘要，用于章节结束时展示"""
+    if session_id not in learning_sessions:
+        return {"misconceptions": [], "total_wrong": 0, "socratic_questions": []}
+    t = learning_sessions[session_id]
+    return {
+        "misconceptions": t.misconceptions,
+        "total_wrong": len(t.wrong_records),
+        "socratic_questions": t.socratic_questions[-3:],  # 最近3条追问
+    }
 
 
 @app.delete("/session/{session_id}")

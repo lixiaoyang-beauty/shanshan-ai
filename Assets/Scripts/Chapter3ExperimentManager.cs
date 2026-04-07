@@ -286,13 +286,200 @@ public class Chapter3ExperimentManager : MonoBehaviour
     }
 
     // ══════════════════════════════════════════
-    // 提示等级
+    // 提示等级（调用 /hint 接口，MiniMax 生成简短提示语）
     // ══════════════════════════════════════════
     void GiveHint(int level)
     {
-        // 闲置提示不走预设问题流程，用 CallShanShanApi 调 MiniMax
-        string context = $"玩家在阶段{stage}停留太久，hint等级{level}，当前角度{currentIncidentAngle:.1f}度，生成一句简短提示引导玩家继续探索";
-        StartCoroutine(CallShanShanApi(context, stage));
+        string context = $"玩家在阶段{stage}，hint等级{level}，当前角度{currentIncidentAngle:.1f}度，是否全反射={isTotalReflection}，生成一句简短提示（15字以内），不要选项，像朋友聊天一样。";
+        StartCoroutine(CallShanShanHint(context));
+    }
+    // ══════════════════════════════════════════
+    // 学习轨迹记录（Feature 3：调用 /learning-data 追踪玩家学习状态）
+    // 答错时调用：发送错题详情 → MiniMax分析 → 返回苏格拉底追问
+    // ══════════════════════════════════════════
+    void RecordWrongAnswer(string qid, string selectedOpt, string correctOpt)
+    {
+        StartCoroutine(DoRecordWrongAnswer(qid, selectedOpt, correctOpt));
+    }
+
+    IEnumerator DoRecordWrongAnswer(string qid, string selectedOpt, string correctOpt)
+    {
+        string body =
+            "{\"session_id\":\"" + sessionId + "\"," +
+            "\"question_id\":\"" + qid + "\"," +
+            "\"selected_option\":\"" + EscapeJson(selectedOpt) + "\"," +
+            "\"correct_answer\":\"" + EscapeJson(correctOpt) + "\"," +
+            "\"wrong_count\":" + wrongAttempts + "," +
+            "\"exploration_stage\":" + stage + "," +
+            "\"current_angle\":" + currentIncidentAngle.ToString("F1") + "," +
+            "\"idle_time\":" + idleTimer.ToString("F1") + "}";
+
+        using var req = new UnityWebRequest(shanShanServerUrl + "/learning-data", "POST");
+        req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+        req.downloadHandler = new DownloadHandlerBuffer();
+        req.SetRequestHeader("Content-Type", "application/json");
+
+        yield return req.SendWebRequest();
+
+        if (req.result == UnityWebRequest.Result.Success)
+        {
+            string json = req.downloadHandler.text;
+            int sqIdx = json.IndexOf("\"socratic_question\":\"");
+            if (sqIdx >= 0)
+            {
+                int s = sqIdx + 20;
+                int e = json.IndexOf("\"", s);
+                if (e > s)
+                {
+                    string sq = json.Substring(s, e - s);
+                    if (!string.IsNullOrEmpty(sq) && sq != "null")
+                    {
+                        // 等主反馈显示完（2秒）后，叠加显示AI追问
+                        yield return new WaitForSeconds(2.5f);
+                        ShanShanSayLocal("💡 " + sq, true);
+                    }
+                }
+            }
+        }
+    }
+
+    // 章节结束时获取迷思概念摘要并展示面板
+    void ShowLearningSummary()
+    {
+        StartCoroutine(DoShowLearningSummary());
+    }
+
+    IEnumerator DoShowLearningSummary()
+    {
+        using var req = new UnityWebRequest(shanShanServerUrl + "/trajectory/summary/" + sessionId, "GET");
+        req.downloadHandler = new DownloadHandlerBuffer();
+        yield return req.SendWebRequest();
+
+        string misconceptions = "";
+        int totalWrong = 0;
+
+        if (req.result == UnityWebRequest.Result.Success)
+        {
+            string json = req.downloadHandler.text;
+            int mIdx = json.IndexOf("\"total_wrong\":");
+            if (mIdx >= 0)
+            {
+                int nStart = mIdx + 14;
+                int nEnd = json.IndexOfAny(new char[] { ',', '}' }, nStart);
+                if (nEnd > nStart)
+                    totalWrong = int.TryParse(json.Substring(nStart, nEnd - nStart), out int v) ? v : 0;
+            }
+        }
+
+        // 迷思概念文本（硬编码，作为后备；主要从后端读取）
+        string body = "本次学习你共遇到了以下迷思概念：\n";
+        if (questionWrongCount.Count > 0)
+        {
+            if (questionWrongCount.ContainsKey("q_line_count") && questionWrongCount["q_line_count"] > 0)
+                body += "  光线分解：误以为只有1条或2条光线\n";
+            if (questionWrongCount.ContainsKey("q_refraction_rule") && questionWrongCount["q_refraction_rule"] > 0)
+                body += "  折射规律：误以为入射角越大折射角越小\n";
+            if (questionWrongCount.ContainsKey("q_critical_angle") && questionWrongCount["q_critical_angle"] > 0)
+                body += "  临界角：对临界角概念不清晰\n";
+            if (questionWrongCount.ContainsKey("q_total_reflection") && questionWrongCount["q_total_reflection"] > 0)
+                body += "  全反射：误以为光消失了或被吸收\n";
+            if (questionWrongCount.ContainsKey("q_verify") && questionWrongCount["q_verify"] > 0)
+                body += "  全反射条件：对两个条件缺一不少\n";
+        }
+        else
+        {
+            body = "太棒了！本次学习没有遇到迷思概念，所有概念都掌握得很好！";
+        }
+
+        ShowSummaryPanel(totalWrong, body);
+    }
+
+    void ShowSummaryPanel(int totalWrong, string body)
+    {
+        var canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+
+        var overlay = new GameObject("SummaryOverlay");
+        overlay.transform.SetParent(canvas.transform, false);
+        FillRect(overlay);
+        overlay.AddComponent<Image>().color = new Color(0, 0, 0, 0.7f);
+
+        var panel = new GameObject("SummaryPanel");
+        panel.transform.SetParent(overlay.transform, false);
+        var pRt = panel.AddComponent<RectTransform>();
+        pRt.anchorMin = new Vector2(0.15f, 0.15f);
+        pRt.anchorMax = new Vector2(0.85f, 0.85f);
+        pRt.offsetMin = pRt.offsetMax = Vector2.zero;
+        panel.AddComponent<Image>().color = NAVY2;
+        MakeBorder(panel, CYAN, 2f);
+
+        // 标题
+        MakeTMP("Title", panel.transform,
+            V2(0f, 0.82f), V2(1f, 0.95f), V2(20, 5), V2(-20, -5),
+            "学习报告", 28, CYAN, TextAlignmentOptions.Center, true);
+
+        MakeImg("Div", panel.transform,
+            V2(0.02f, 0.80f), V2(0.98f, 0.82f), V2(0, 0), V2(0, 0),
+            new Color(0f, 0.82f, 1f, 0.4f));
+
+        // 错题数
+        string statText = totalWrong == 0
+            ? "本题全对！"
+            : $"本次共答错 {totalWrong} 次，以下是你可能需要加强的概念：";
+        MakeTMP("Stat", panel.transform,
+            V2(0f, 0.72f), V2(1f, 0.80f), V2(20, 5), V2(-20, -5),
+            statText, 18, new Color(1f, 0.85f, 0.3f, 1f), TextAlignmentOptions.Center, false);
+
+        // 迷思概念正文
+        MakeTMP("Body", panel.transform,
+            V2(0f, 0.10f), V2(1f, 0.72f), V2(20, 8), V2(-20, -8),
+            body, 20, CREAM, TextAlignmentOptions.Top, false);
+
+        // 关闭按钮
+        MakeActionButton("继续回博物馆破案！", GOLD,
+            () => { Destroy(overlay); StartAllyEnding(); },
+            V2(0.2f, 0.02f), V2(0.8f, 0.09f), panel.transform);
+
+        StartCoroutine(PopIn(pRt));
+    }
+
+    float lastAngleSampleTime = 0f;
+    float lastSampledAngle = 15f;
+
+    IEnumerator CallShanShanHint(string hintContext)
+    {
+        if (shanShanBusy) yield break;
+        shanShanBusy = true;
+
+        string body =
+            "{\"hint_context\":\"" + EscapeJson(hintContext) + "\"," +
+            "\"exploration_stage\":" + stage + "}";
+
+        using var req = new UnityWebRequest(shanShanServerUrl + "/hint", "POST");
+        req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+        req.downloadHandler = new DownloadHandlerBuffer();
+        req.SetRequestHeader("Content-Type", "application/json");
+
+        yield return req.SendWebRequest();
+        shanShanBusy = false;
+
+        if (req.result == UnityWebRequest.Result.Success)
+        {
+            string json = req.downloadHandler.text;
+            int idx = json.IndexOf("\"hint_text\":\"");
+            if (idx >= 0)
+            {
+                int s = idx + 13;
+                int e = json.IndexOf("\"", s);
+                if (e > s)
+                {
+                    string hintText = json.Substring(s, e - s);
+                    ShanShanSayLocal(hintText, true);
+                    yield break;
+                }
+            }
+        }
+        ShanShanSayLocal("试试调节角度，观察光线有什么变化！", true);
     }
 
     // ══════════════════════════════════════════
@@ -318,7 +505,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         LearningTracker.learningTrackerEnabled = true;  // 开启学习追踪
         StartCoroutine(ClearSession());
         // 直接显示欢迎语，不需要调API
-        ShanShanSayLocal("嗨！我是闪闪！实验台准备好了，先点一下开启入射光线，看看会有什么发现吧！", true);
+        ShanShanSayLocal("嗨柯南！我是闪闪！实验台已经就位啦，点一下那个按钮开启光线，我们一起看看会发生什么！", true);
     }
 
     // ══════════════════════════════════════════
@@ -337,7 +524,16 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         StartCoroutine(DelayDo(0.8f, () => {
             currentQuestionId = "q_line_count";
-            StartCoroutine(ShanShanAsk("玩家刚开启光线，问他能看到几条光线。选项：1条|2条|3条|4条"));
+            wrongAttempts = 0;
+            StartCoroutine(ShanShanAsk("哇！光线出来了！你能看到几条光线？", () => {
+                ShowChoiceBubble(
+                    new[]{ "1条", "2条", "3条" },
+                    new System.Action[]{
+                        () => OnLineCountAnswer(1),
+                        () => OnLineCountAnswer(2),
+                        () => OnLineCountAnswer(3)
+                    });
+            }));
         }));
     }
 
@@ -346,66 +542,18 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void OnSliderChanged(float value)
     {
-        Debug.Log($"[OnSliderChanged] ENTER val={value} stage={stage} wc={waitingForChoice}");
         UpdateRayLines(value);
-        if (stage < 2) return;
+        RecordAngleSample();
+    }
 
-        Debug.Log($"[SliderChanged] stage={stage} val={value} isTR={isTotalReflection} s3T={stage3Triggered} s2T={stage2Triggered}");
-
-        // 猜测挑战
-        if (stage == 2 && !stage2Triggered && value > 20f && !isTotalReflection)
+    void RecordAngleSample()
+    {
+        float now = Time.time;
+        if (now - lastAngleSampleTime > 1f && laserOn)
         {
-            Debug.Log("[SliderChanged] 触发预测挑战！");
-            stage2Triggered = true;
-            LockSlider();  // 特定角度触发问题时锁定
-            StartCoroutine(DelayDo(1f, ShowPredictionChallenge));
+            lastAngleSampleTime = now;
+            lastSampledAngle = currentIncidentAngle;
         }
-
-        // 折射规律选择题
-        if (stage == 3 && !stage3Triggered && value > 38f && !isTotalReflection)
-        {
-            Debug.Log("[SliderChanged] 触发折射规律题！");
-            stage3Triggered = true;
-            stage = 4;
-            idleTimer = 0f; hintLevel = -1;
-            LockSlider();  // 特定角度触发问题时锁定
-            StartCoroutine(DelayDo(0.8f, () => {
-                currentQuestionId = "q_refraction_rule";
-                StartCoroutine(ShanShanAsk("玩家正在探索折射规律，问他入射角变大时折射角怎么变", () => {
-                    ShowChoiceBubble(
-                        new[]{ "折射角会变大", "折射角会变小", "折射角不变" },
-                        new System.Action[]{
-                            () => OnRefractionRuleAnswer(true),
-                            () => OnRefractionRuleAnswer(false),
-                            () => OnRefractionRuleAnswer(false)
-                        });
-                }));
-            }));
-        }
-
-        // 临界角选择题（必须折射规律答完才触发）
-        if (stage == 4 && !stage4Triggered && value > 45f && !isTotalReflection && refractionRuleAnswered)
-        {
-            stage4Triggered = true;
-            LockSlider();  // 特定角度触发问题时锁定
-            StartCoroutine(DelayDo(0.8f, () => {
-                currentQuestionId = "q_critical_angle";
-                StartCoroutine(ShanShanAsk("玩家接近临界角，折射光很弱，问他折射角=90度时的入射角叫什么", () => {
-                    ShowChoiceBubble(
-                        new[]{ "临界角", "折射角", "入射角", "反射角" },
-                        new System.Action[]{
-                            () => OnCriticalAngleAnswer(true),
-                            () => OnCriticalAngleAnswer(false),
-                            () => OnCriticalAngleAnswer(false),
-                            () => OnCriticalAngleAnswer(false)
-                        });
-                }));
-            }));
-        }
-
-        // 全反射
-        if (stage >= 3 && isTotalReflection && !totalReflFound)
-            OnTotalReflectionFirst();
     }
 
     // ══════════════════════════════════════════
@@ -416,28 +564,34 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (count == 3)
         {
-            questionWrongCount["q1_1"] = 0;
-            UnlockSlider();
+            wrongAttempts = 0;
             EarnStar(0);
             AudioManager.PlayCorrect();
-            StartCoroutine(ShanShanAsk("玩家答对了3条光线，引导他继续探索增大角度观察折射"));
-            StartCoroutine(DelayDo(3f, () =>
-                StartCoroutine(CallShanShanApi("玩家认识了3条光线，已了解折射概念，引导他拖动滑块增大角度探索折射规律", 2))));
+            ShanShanSayLocal(GetCorrectFeedback("q_line_count"), true);
         }
         else
         {
             AudioManager.PlayWrong();
-            if (!questionWrongCount.ContainsKey("q1_1")) questionWrongCount["q1_1"] = 0;
-            questionWrongCount["q1_1"]++;
+            wrongAttempts++;
             learningTracker?.OnAnswerRecorded("line_count");
-            if (questionWrongCount["q1_1"] >= 3)
+            string selectedOpt = count == 1 ? "1条" : (count == 2 ? "2条" : "3条");
+            RecordWrongAnswer("q_line_count", selectedOpt, "3条");
+            if (wrongAttempts >= 3)
             {
-                ShanShanSayLocal("光线遇到水面时，会同时发生反射和折射。入射光、反射光、折射光，一共3条光线。继续探索吧！");
-                StartCoroutine(DelayDo(1.5f, () => ShowLectureContinueButton()));
+                ShanShanSayLocal(GetLectureText("q_line_count"), true);
+                wrongAttempts = 0;
+                StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
             }
             else
             {
-                StartCoroutine(ShanShanAsk("玩家答错了，引导他再仔细数一数有3条光线"));
+                ShanShanSayLocal(GetWrongHint("q_line_count", wrongAttempts), true);
+                StartCoroutine(DelayDo(2.2f, () => ShowChoiceBubble(
+                    new[]{ "1条", "2条", "3条" },
+                    new System.Action[]{
+                        () => OnLineCountAnswer(1),
+                        () => OnLineCountAnswer(2),
+                        () => OnLineCountAnswer(3)
+                    })));
             }
         }
     }
@@ -447,31 +601,31 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
-            questionWrongCount["q1_2"] = 0;
+            wrongAttempts = 0;
             refractionRuleAnswered = true;
             UnlockSlider();
             AudioManager.PlayCorrect();
-            StartCoroutine(ShanShanAsk("玩家答对了折射规律，鼓励并引导他继续增大角度接近临界角"));
-            StartCoroutine(DelayDo(3f, () =>
-                StartCoroutine(CallShanShanApi("玩家答对折射规律，引导他继续增大角度接近临界角48度", 3))));
+            ShanShanSayLocal(GetCorrectFeedback("q_refraction_rule"), true);
         }
         else
         {
             AudioManager.PlayWrong();
-            if (!questionWrongCount.ContainsKey("q1_2")) questionWrongCount["q1_2"] = 0;
-            questionWrongCount["q1_2"]++;
+            wrongAttempts++;
             learningTracker?.OnAnswerRecorded("refraction_rule");
-            if (questionWrongCount["q1_2"] >= 3)
+            string wrongOpt = "折射角会变小"; // 迷思概念映射的key
+            RecordWrongAnswer("q_refraction_rule", wrongOpt, "折射角会变大");
+            if (wrongAttempts >= 3)
             {
-                ShanShanSayLocal("光的折射规律是：入射角越大，折射角越大。就像筷子插进水里的样子，角度会变大而不是变小。继续探索吧！");
-                StartCoroutine(DelayDo(1.5f, () => ShowLectureContinueButton()));
+                ShanShanSayLocal(GetLectureText("q_refraction_rule"), true);
+                wrongAttempts = 0;
+                StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
             }
             else
             {
-                StartCoroutine(ShanShanAsk("玩家答错了折射规律，引导他对比30度和45度的折射角变化"));
-                StartCoroutine(DelayDo(2f, () => {
+                ShanShanSayLocal(GetWrongHint("q_refraction_rule", wrongAttempts), true);
+                StartCoroutine(DelayDo(2.2f, () => {
                     currentQuestionId = "q_refraction_rule";
-                    StartCoroutine(ShanShanAsk("再次问玩家：入射角变大时，折射角怎么变？", () => {
+                    StartCoroutine(ShanShanAsk("再次引导玩家观察：入射角变大时，折射角怎么变？", () => {
                         ShowChoiceBubble(
                             new[]{ "折射角会变大", "折射角会变小", "折射角不变" },
                             new System.Action[]{
@@ -490,30 +644,29 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
-            questionWrongCount["q3_1"] = 0;
+            wrongAttempts = 0;
             UnlockSlider();
             AudioManager.PlayCorrect();
-            StartCoroutine(ShanShanAsk("玩家答对了临界角，引导他把角度增大超过48度观察全反射"));
-            StartCoroutine(DelayDo(3f, () =>
-                StartCoroutine(CallShanShanApi("玩家理解临界角，引导他把角度增大超过48度发现全反射", 4))));
+            ShanShanSayLocal(GetCorrectFeedback("q_critical_angle"), true);
         }
         else
         {
             AudioManager.PlayWrong();
-            if (!questionWrongCount.ContainsKey("q3_1")) questionWrongCount["q3_1"] = 0;
-            questionWrongCount["q3_1"]++;
+            wrongAttempts++;
             learningTracker?.OnAnswerRecorded("critical_angle");
-            if (questionWrongCount["q3_1"] >= 3)
+            RecordWrongAnswer("q_critical_angle", "折射角", "临界角");
+            if (wrongAttempts >= 3)
             {
-                ShanShanSayLocal("当折射角达到90度时，这时的入射角叫做临界角。临界角是全反射现象发生的关键条件。继续探索吧！");
-                StartCoroutine(DelayDo(1.5f, () => ShowLectureContinueButton()));
+                ShanShanSayLocal(GetLectureText("q_critical_angle"), true);
+                wrongAttempts = 0;
+                StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
             }
             else
             {
-                StartCoroutine(ShanShanAsk("玩家答错了临界角概念，引导他再选一次"));
-                StartCoroutine(DelayDo(1.5f, () => {
+                ShanShanSayLocal(GetWrongHint("q_critical_angle", wrongAttempts), true);
+                StartCoroutine(DelayDo(2.2f, () => {
                     currentQuestionId = "q_critical_angle";
-                    StartCoroutine(ShanShanAsk("再次问玩家：折射角=90度时的入射角叫什么？", () => {
+                    StartCoroutine(ShanShanAsk("再次引导玩家：折射角等于90度时的那个入射角叫什么？", () => {
                         ShowChoiceBubble(
                             new[]{ "临界角", "折射角", "入射角", "反射角" },
                             new System.Action[]{
@@ -537,7 +690,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         predictionMade = true;
         wrongAttempts = 0;  // 每道新问题开始时重置错题计数
         currentQuestionId = "q_prediction";
-        StartCoroutine(ShanShanAsk("玩家接近临界角（47度以上），折射光越来越弱，继续增大角度会发生什么？选项：变得更强|逐渐消失|方向不变"));
+        StartCoroutine(ShanShanAsk("折射光越来越弱了，用好奇的语气问玩家：继续增大角度，折射光会怎样？选项：变得更强|逐渐消失|方向不变"));
     }
 
     void OnPrediction(bool correct, string reply)
@@ -552,9 +705,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowPredictionContinueButton()
     {
-        // 继续探索按钮：解锁slider，进入下一阶段
+        // 继续探索按钮：推进阶段到3，解锁slider
         var btn = MakeActionButton("继续探索", CYAN,
-            () => { UnlockSlider(); ClearBubbles(); },
+            () => { stage = 3; idleTimer = 0f; hintLevel = -1; UnlockSlider(); ClearBubbles(); },
             V2(0.3f, 0.02f), V2(0.7f, 0.12f));
         if (btn != null) extraButtons.Add(btn);
     }
@@ -579,72 +732,58 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         yield return new WaitForSeconds(0.5f);
         currentQuestionId = "q_total_reflection";
-        StartCoroutine(ShanShanAsk("全反射发生了！折射光消失了！用惊讶语气问玩家光去哪了。选项：光消失了|光全部反射回水中|光被水吸收了"));
-    }
-
-    void ShowTotalReflectionRetryBubble()
-    {
-        currentQuestionId = "q_total_reflection";
-        StartCoroutine(ShanShanAsk("玩家答错了折射光消失问题，引导他再想想光去了哪里", () => {
+        wrongAttempts = 0;
+        StartCoroutine(ShanShanAsk("折射光突然消失了！用非常惊讶的语气感叹这个现象，然后问玩家光去哪了。", () => {
             ShowChoiceBubble(
                 new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
                 new System.Action[]{
-                    () => OnTotalReflAnswerSecond(false, "还是不对哦！注意观察反射光——它变亮了！"),
-                    () => OnTotalReflAnswerSecond(true,  "对！光全部反射回水中——这就是全反射！"),
-                    () => OnTotalReflAnswerSecond(false, "不是被吸收！注意观察反射光——它变亮了！")
+                    () => OnTotalReflAnswer(false),
+                    () => OnTotalReflAnswer(true),
+                    () => OnTotalReflAnswer(false)
                 });
         }));
     }
 
-    void OnTotalReflAnswerSecond(bool correct, string reply)
+    void OnTotalReflAnswer(bool correct)
     {
         ClearBubbles();
-        ShanShanSayLocal(reply);
         if (correct)
         {
-            questionWrongCount["q5_1"] = 0;
+            wrongAttempts = 0;
+            AudioManager.PlayCorrect();
+            ShanShanSayLocal(GetCorrectFeedback("q_total_reflection"), true);
             UnlockSlider();
-            StartCoroutine(CallShanShanApi("玩家理解了光全部反射回水中，请确认这就是全反射", 5, ShowDiscoveryCard));
+            StartCoroutine(DelayDo(1.8f, ShowDiscoveryCard));
         }
         else
         {
+            AudioManager.PlayWrong();
+            wrongAttempts++;
             learningTracker?.OnAnswerRecorded("total_reflection");
-            // 第二次还错，继续给机会，提示反射光变亮
-            StartCoroutine(DelayDo(1.5f, ShowTotalReflectionThirdBubble));
+            RecordWrongAnswer("q_total_reflection", "光被水吸收了", "光全部反射回水中");
+            if (wrongAttempts >= 3)
+            {
+                ShanShanSayLocal(GetLectureText("q_total_reflection"), true);
+                wrongAttempts = 0;
+                StartCoroutine(DelayDo(2.5f, ShowDiscoveryCard));
+            }
+            else
+            {
+                ShanShanSayLocal(GetWrongHint("q_total_reflection", wrongAttempts), true);
+                StartCoroutine(DelayDo(2.2f, ShowTotalReflRetryBubble));
+            }
         }
     }
 
-    void ShowTotalReflectionThirdBubble()
+    void ShowTotalReflRetryBubble()
     {
-        currentQuestionId = "q_total_reflection";
-        StartCoroutine(ShanShanAsk("玩家需要判断光去哪了，引导他注意观察反射光变亮，提示光全部反射回去了", () => {
-            ShowChoiceBubble(
-                new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
-                new System.Action[]{
-                    () => OnTotalReflAnswerThird(false, "不是消失哦！反射光变亮了，说明光只是反射回去了！"),
-                    () => OnTotalReflAnswerThird(true,  "对！光全部反射回水中——这就是全反射！"),
-                    () => OnTotalReflAnswerThird(false, "不是被吸收！反射光变亮了，说明光反射回去了！")
-                });
-        }));
-    }
-
-    void OnTotalReflAnswerThird(bool correct, string reply)
-    {
-        ClearBubbles();
-        ShanShanSayLocal(reply);
-        if (correct)
-        {
-            questionWrongCount["q5_1"] = 0;
-            UnlockSlider();
-            StartCoroutine(CallShanShanApi("玩家理解了光全部反射回水中，请确认这就是全反射", 5, ShowDiscoveryCard));
-        }
-        else
-        {
-            // 三次机会都用完了，不再给选项，直接解释并展示发现卡片
-            questionWrongCount["q5_1"] = 0;
-            StartCoroutine(ShanShanAsk("玩家多次答错，直接告诉他光全部反射回水中，这就是全反射"));
-            StartCoroutine(DelayDo(2f, ShowDiscoveryCard));
-        }
+        ShowChoiceBubble(
+            new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
+            new System.Action[]{
+                () => OnTotalReflAnswer(false),
+                () => OnTotalReflAnswer(true),
+                () => OnTotalReflAnswer(false)
+            });
     }
 
     // ══════════════════════════════════════════
@@ -736,6 +875,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         else
         {
             AudioManager.PlayWrong();
+            RecordWrongAnswer("q_verify", "只要角度够大就会全反射", "光从水射向空气，入射角>=临界角");
             StartCoroutine(ShanShanAsk("玩家答错了全反射条件，引导他记住两个条件：光从水到空气且入射角>=临界角"));
             learningTracker?.OnAnswerRecorded("verify_condition");
             StartCoroutine(DelayDo(2f, ShowVerifyPanel));
@@ -752,6 +892,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
+            RecordWrongAnswer("q_coin", "小于临界角", "大于临界角");
             learningTracker?.OnAnswerRecorded("coin_angle");
             // 答错了，给第二次选择机会
             StartCoroutine(DelayDo(1.5f, ShowCoinRetryBubble));
@@ -776,11 +917,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
+            RecordWrongAnswer("q_coin", "小于临界角", "大于临界角");
             StartCoroutine(ShanShanAsk("玩家答对了，解释古币消失原因并引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));
         }
         else
         {
+            RecordWrongAnswer("q_coin", "大于临界角", "大于临界角");
             StartCoroutine(ShanShanAsk("玩家答错了，解释从侧面看角度大导致全反射，引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));
         }
@@ -791,7 +934,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         goBtn = MakeActionButton("已明白原理，回博物馆破案！",GOLD,
             () => {
                 if (goBtn != null) { Destroy(goBtn); goBtn = null; }
-                StartAllyEnding();
+                ShowLearningSummary();  // 先展示学习报告
             },
             V2(0.2f,0.02f),V2(0.8f,0.11f));
     }
@@ -946,7 +1089,15 @@ public class Chapter3ExperimentManager : MonoBehaviour
         string q = shanShanInput.text.Trim();
         if (string.IsNullOrEmpty(q)) return;
         shanShanInput.text = "";
-        StartCoroutine(CallShanShanApi(q, stage));
+        StartCoroutine(AskShanShanFree(q));
+    }
+
+    IEnumerator AskShanShanFree(string q)
+    {
+        ShanShanSayLocal("让我想想……", true);
+        yield return CallShanShanApi(q, stage);
+        // 如果API失败，CallShanShanApi 会显示"暂时连不上"
+        // 不再做任何额外处理，提示已由 CallShanShanApi 显示
     }
 
     void ShanShanSayLocal(string msg, bool forceShow = false)
@@ -966,15 +1117,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
     private int wrongAttempts = 0;  // 本题错了几次
 
     // AI生成问题+选项，并显示
-    // 方案A：发送 question_id，后端返回预设问题和选项
+    // 调用后端 /chat 接口，获取预设问题和选项
     IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
     {
-        // 不再用 shanShanBusy 锁，因为 StartCoroutine 本身是队列执行的
-
-        // 发送 question_id 获取预设问题和选项
+        string qid = currentQuestionId;
         string body =
             "{\"session_id\":\"" + sessionId + "\"," +
-            "\"question_id\":\"" + currentQuestionId + "\"}";
+            "\"question_id\":\"" + qid + "\"," +
+            "\"wrong_count\":" + wrongAttempts + "}";
 
         using var req = new UnityWebRequest(shanShanServerUrl + "/chat", "POST");
         req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -989,51 +1139,50 @@ public class Chapter3ExperimentManager : MonoBehaviour
             Debug.Log("[ShanShanAsk] 收到响应: " + json);
 
             // 解析 question 字段
+            string question = "";
             int qIdx = json.IndexOf("\"question\":\"");
-            if (qIdx >= 0)
-            {
+            if (qIdx >= 0) {
                 int qStart = qIdx + 12;
                 int qEnd = json.IndexOf("\"", qStart);
-                string question = qEnd > qStart ? json.Substring(qStart, qEnd - qStart) : "";
-
-                // 解析 options 字段
-                string[] options = new string[0];
-                int optIdx = json.IndexOf("\"options\":[");
-                if (optIdx >= 0)
-                {
-                    int arrStart = json.IndexOf("[", optIdx);
-                    int arrEnd = json.IndexOf("]", arrStart);
-                    if (arrEnd > arrStart)
-                    {
-                        string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
-                        string[] parts = arrStr.Split(new char[] { '"' });
-                        var optList = new System.Collections.Generic.List<string>();
-                        foreach (var p in parts)
-                        {
-                            string trimmed = p.Trim().Trim(',', ' ');
-                            if (!string.IsNullOrEmpty(trimmed) && trimmed != ",")
-                                optList.Add(trimmed);
-                        }
-                        options = optList.ToArray();
-                    }
-                }
-
-                aiCurrentQuestion = question;
-                aiCurrentOptions = options;
-                ShanShanSayLocal(question, true);
-
-                if (options.Length > 0)
-                {
-                    yield return new WaitForSeconds(1f);
-                    System.Action[] cbs = new System.Action[options.Length];
-                    for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
-                    ShowChoiceBubble(options, cbs);
-                }
-                onReplyDone?.Invoke();
-                yield break;
+                if (qEnd > qStart) question = json.Substring(qStart, qEnd - qStart);
             }
+
+            // 解析 options 数组
+            string[] options = new string[0];
+            int optIdx = json.IndexOf("\"options\":[");
+            if (optIdx >= 0) {
+                int arrStart = json.IndexOf("[", optIdx);
+                int arrEnd = json.IndexOf("]", arrStart);
+                if (arrEnd > arrStart) {
+                    string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
+                    string[] parts = arrStr.Split(new char[] { '"' });
+                    var optList = new System.Collections.Generic.List<string>();
+                    foreach (var p in parts) {
+                        string trimmed = p.Trim().Trim(',', ' ');
+                        if (!string.IsNullOrEmpty(trimmed) && trimmed != ",")
+                            optList.Add(trimmed);
+                    }
+                    options = optList.ToArray();
+                }
+            }
+
+            ShanShanSayLocal(question, true);
+
+            if (options.Length > 0)
+            {
+                yield return new WaitForSeconds(1f);
+                onReplyDone?.Invoke();
+            }
+            else
+            {
+                onReplyDone?.Invoke();
+            }
+            yield break;
         }
-        ShanShanSayLocal("闪闪暂时累了，继续观察实验台吧！", true);
+
+        // API 失败时：显示 context 作为问题，调用回调
+        ShanShanSayLocal(context, true);
+        yield return new WaitForSeconds(1f);
         onReplyDone?.Invoke();
     }
 
@@ -1124,84 +1273,115 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         catch { }
 
-        // 预测挑战：跳过后端feedback，直接显示自定义消息+继续按钮
+        // 预测挑战：无论对错都显示衔接语+继续按钮，不评判对错
         if (currentQuestionId == "q_prediction")
         {
-            ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！记得要仔细观察折射光的强度变化噢~", true);
-            StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
+            ShanShanSayLocal("好有趣！不管你猜得对不对，我们一起继续看看会发生什么！", true);
+            StartCoroutine(DelayDo(1.2f, ShowPredictionContinueButton));
             return;
         }
 
-        ShanShanSayLocal(feedback, true);
         lastSelectedOption = "";
 
+        // 答对 → show_discovery_card
         if (nextAction == "show_discovery_card")
         {
             AudioManager.PlayCorrect();
-            StartCoroutine(DelayDo(1.5f, ShowDiscoveryCard));
+            ShanShanSayLocal(GetCorrectFeedback(currentQuestionId), true);
+            UnlockSlider();
+            StartCoroutine(DelayDo(1.8f, ShowDiscoveryCard));
             return;
         }
 
-        if (nextAction == "lecture")
-        {
-            // 第三次答错，显示讲解+Continue按钮解锁滑块
-            AudioManager.PlayWrong();
-            wrongAttempts++;
-            learningTracker?.OnAnswerRecorded("ai_wrong");
-            StartCoroutine(DelayDo(1.5f, () => ShowLectureContinueButton()));
-            return;
-        }
-
+        // 答对 → advance（进入下一阶段）
         if (nextAction == "advance" || (correct && string.IsNullOrEmpty(nextAction)))
         {
             AudioManager.PlayCorrect();
-
-            // 预测挑战：无论对错都直接显示继续按钮
-            if (currentQuestionId == "q_prediction")
-            {
-                StartCoroutine(DelayDo(1f, () => {
-                    ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！记得要仔细观察折射光的强度变化噢~", true);
-                    StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
-                }));
-                return;
-            }
-
-            UnlockSlider();  // 答对了，解锁滑块
-            if (!string.IsNullOrEmpty(question) && options.Length > 0)
-            {
-                aiCurrentQuestion = question;
-                aiCurrentOptions = options;
-                StartCoroutine(DelayDo(1.5f, () => {
-                    ShanShanSayLocal(question, true);
-                    ShowAIOptionBubble(options);
-                }));
-            }
+            if (currentQuestionId == "q_refraction_rule")
+                refractionRuleAnswered = true;
+            ShanShanSayLocal(GetCorrectFeedback(currentQuestionId), true);
+            UnlockSlider();
             return;
         }
 
-        // retry 或答错（未达到3次）
+        // 第三次答错 → lecture（讲解+继续按钮）
+        if (nextAction == "lecture")
+        {
+            AudioManager.PlayWrong();
+            wrongAttempts++;
+            learningTracker?.OnAnswerRecorded("ai_wrong");
+            ShanShanSayLocal(GetLectureText(currentQuestionId), true);
+            StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
+            return;
+        }
+
+        // 答错（第1次或第2次）→ 分层提示 + 重新显示相同选项
         AudioManager.PlayWrong();
         wrongAttempts++;
         learningTracker?.OnAnswerRecorded("ai_wrong");
+        ShanShanSayLocal(GetWrongHint(currentQuestionId, wrongAttempts), true);
+        if (aiCurrentOptions.Length > 0)
+            StartCoroutine(DelayDo(2.2f, () => ShowAIOptionBubble(aiCurrentOptions)));
+    }
 
-        // 预测挑战：无论对错都直接显示继续按钮，不重试
-        if (currentQuestionId == "q_prediction")
+    string GetCorrectFeedback(string questionId)
+    {
+        switch (questionId)
         {
-            StartCoroutine(DelayDo(1.5f, () => {
-                ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！记得要仔细观察折射光的强度变化噢~", true);
-                StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
-            }));
-            return;
+            case "q_line_count":     return "太棒了！入射光、反射光、折射光，三条全找到了！继续拖大角度，看看折射光会有什么变化～";
+            case "q_refraction_rule":return "就是这样！入射角越大，折射角也越大。继续增大角度，快要发生一件很神奇的事了……";
+            case "q_critical_angle": return "答对了！这个特殊角度就叫临界角！把角度调过临界角，看看会发生什么！";
+            case "q_total_reflection":return "没错！光全部反射回水里了——这就是全反射！太神奇了！";
+            case "q_verify":         return "完全正确！两个条件缺一不可，记住了吗！";
+            case "q_coin":           return "对！从侧面看古币，入射角超过临界角，光反射不出来，所以看不见！谜底揭开了！";
+            default:                 return "答对了！继续探索吧！";
         }
+    }
 
-        if (!string.IsNullOrEmpty(question) && options.Length > 0)
+    string GetWrongHint(string questionId, int attempts)
+    {
+        switch (questionId)
         {
-            aiCurrentQuestion = question;
-            aiCurrentOptions = options;
-            StartCoroutine(DelayDo(1.5f, () => {
-                ShanShanSayLocal(question, true);
-                ShowAIOptionBubble(options);
-            }));
+            case "q_line_count":
+                return attempts == 1
+                    ? "没关系，再数数看～光射到水面时，会同时向两个方向走哦！"
+                    : "提示：入射光 + 反射光 + 折射光，数一数一共几条？";
+            case "q_refraction_rule":
+                return attempts == 1
+                    ? "对比一下角度小时和角度大时，折射光偏向哪边，有没有变化？"
+                    : "再观察一下～入射角变大的时候，折射光是离界面更近还是更远？";
+            case "q_critical_angle":
+                return attempts == 1
+                    ? "折射角恰好等于90度时，这个特殊的入射角有个专门的名字哦～"
+                    : "临界就是'临界点'——超过这个角，折射光就彻底消失了！";
+            case "q_total_reflection":
+                return attempts == 1
+                    ? "折射光那边没有光了，它去哪了呢？看看反射光那边！"
+                    : "反射光是不是变亮了？说明光都跑回水里去了——那光去哪了？";
+            case "q_verify":
+                return attempts == 1
+                    ? "全反射需要两个条件同时满足，想想发现卡片里说的是什么～"
+                    : "条件1：光从光密到光疏（水→空气）；条件2：角度要超过临界角！";
+            case "q_coin":
+                return attempts == 1
+                    ? "从侧面看古币时，入射角是比正上方看更大还是更小？"
+                    : "侧面就意味着角度倾斜很厉害，入射角一定比正上方大很多～";
+            default:
+                return attempts == 1 ? "没关系，再想想看！" : "再仔细观察一下实验台～";
+        }
+    }
+
+    string GetLectureText(string questionId)
+    {
+        switch (questionId)
+        {
+            case "q_line_count":      return "光遇到水面会同时反射和折射。入射光 + 反射光 + 折射光，一共3条！记住了吗？继续探索！";
+            case "q_refraction_rule": return "光的折射规律：入射角越大，折射角也越大。就像筷子插进水里的样子～继续增大角度看看！";
+            case "q_critical_angle":  return "折射角恰好等于90度时，这个入射角叫做临界角。超过临界角，折射光就消失啦！快去看看！";
+            case "q_total_reflection":return "折射光消失，所有光都反射回水中——这就是全反射！要发生全反射，入射角必须超过临界角！";
+            case "q_verify":          return "全反射条件：①光从水射向空气（光密→光疏）；②入射角大于等于临界角。两个缺一不可！";
+            case "q_coin":            return "从侧面看古币，入射角很大，超过临界角，发生全反射，光出不来，所以古币消失了！";
+            default:                  return "没关系，继续探索！";
         }
     }
 
