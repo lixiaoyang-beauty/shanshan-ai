@@ -459,6 +459,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
+        wrongAttempts = 0;  // 每道新问题开始时重置错题计数
         currentQuestionId = "q_prediction";
         StartCoroutine(ShanShanAsk("玩家接近临界角（47度以上），折射光越来越弱，继续增大角度会发生什么？选项：变得更强|逐渐消失|方向不变"));
     }
