@@ -698,9 +698,25 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
-        wrongAttempts = 0;  // 每道新问题开始时重置错题计数
+        wrongAttempts = 0;
         currentQuestionId = "q_prediction";
-        StartCoroutine(ShanShanAsk("折射光越来越弱了，用好奇的语气问玩家：继续增大角度，折射光会怎样？选项：变得更强|逐渐消失|方向不变"));
+        StartCoroutine(ShanShanAsk("折射光越来越弱了...", () => {
+            ShowChoiceBubble(
+                new[]{ "变得更强", "逐渐消失", "方向不变" },
+                new System.Action[]{
+                    () => OnPredictionSelected(0),
+                    () => OnPredictionSelected(1),
+                    () => OnPredictionSelected(2)
+                });
+        }));
+    }
+
+    void OnPredictionSelected(int idx)
+    {
+        string[] predictionOptions = new[]{ "变得更强", "逐渐消失", "方向不变" };
+        string selected = idx >= 0 && idx < predictionOptions.Length ? predictionOptions[idx] : "";
+        bool correct = (idx == 1);
+        OnPrediction(correct, selected);
     }
 
     void OnPrediction(bool correct, string reply)
@@ -1150,7 +1166,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
         string body =
             "{\"session_id\":\"" + sessionId + "\"," +
             "\"question_id\":\"" + qid + "\"," +
-            "\"wrong_count\":" + wrongAttempts + "}";
+            "\"wrong_count\":" + wrongAttempts + "," +
+            "\"question\":\"" + context.Replace("\"", "\\\"") + "\"," +
+            "\"incident_angle\":" + currentIncidentAngle.ToString("F1") + "," +
+            "\"is_total_reflection\":" + (isTotalReflection ? "true" : "false") + "," +
+            "\"refract_angle\":" + currentRefractAngle.ToString("F1") + "," +
+            "\"exploration_stage\":" + stage + "," +
+            "\"selected_option\":null}";
 
         using var req = new UnityWebRequest(shanShanServerUrl + "/chat", "POST");
         req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
