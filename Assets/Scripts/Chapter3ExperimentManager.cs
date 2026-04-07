@@ -93,6 +93,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // 选项气泡
     private GameObject bubbleContainer;
     private bool waitingForChoice = false;  // 等待玩家选择时暂停提示
+    private bool isShowingNextQuestion = false;  // 防止答对后 ProcessAIAnswerResponse 覆盖下一题文字
 
     // 独立按钮（继续探索/继续按钮/go按钮等）
     private List<GameObject> extraButtons = new List<GameObject>();
@@ -889,6 +890,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
             EarnStar(2);
             AudioManager.PlayCorrect();
             StartCoroutine(FlashScreen(new Color(0.2f,1f,0.3f,0.3f)));
+            isShowingNextQuestion = true;
             StartCoroutine(ShanShanAsk("玩家答对了全反射条件，联系古币案件，问他从侧面看时入射角大还是小", () => {
                 ShowChoiceBubble(
                     new[]{ "大于临界角", "小于临界角" },
@@ -913,6 +915,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
+            isShowingNextQuestion = true;
             StartCoroutine(ShanShanAsk("玩家答对了古币问题，解释为什么从侧面看不到古币，引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));
         }
@@ -1214,6 +1217,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 }
             }
 
+            aiCurrentQuestion = question;
+            aiCurrentOptions = options;
             ShanShanSayLocal(question, true);
 
             if (options.Length > 0)
@@ -1348,8 +1353,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
             AudioManager.PlayCorrect();
             if (currentQuestionId == "q_refraction_rule")
                 refractionRuleAnswered = true;
-            ShanShanSayLocal(GetCorrectFeedback(currentQuestionId), true);
-            UnlockSlider();
+            // 如果 OnVerify/OnCoinAnswer 已经显示了下一题，跳过这里的反馈（避免覆盖新问题文字）
+            if (!isShowingNextQuestion)
+            {
+                ShanShanSayLocal(GetCorrectFeedback(currentQuestionId), true);
+                UnlockSlider();
+            }
+            else
+            {
+                isShowingNextQuestion = false;
+                UnlockSlider();
+            }
             return;
         }
 
@@ -1372,12 +1386,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
             learningTracker?.OnAnswerRecorded("ai_wrong");
             // 显示简短反馈气泡（答错了）
             ShanShanSayLocal(feedback, true);
-            // 1秒后显示苏格拉底追问气泡（个性化引导，和选项同属一个问题上下文）
+            // 1.2秒后显示"原问题 + 💡 追问"大气泡（让玩家同时看到问题和追问）
+            // aiCurrentQuestion 在 ShanShanAsk 回调中已设置，这里直接使用
             if (!string.IsNullOrEmpty(question))
-                StartCoroutine(DelayDo(1f, () => ShanShanSayLocal("💡 " + question, true)));
-            // 2.5秒后显示同一道题的选项
+                StartCoroutine(DelayDo(1.2f, () => ShanShanSayLocal("回顾：" + aiCurrentQuestion + "\n💡 " + question, true)));
+            // 3秒后显示同一道题的选项
             if (options != null && options.Length > 0)
-                StartCoroutine(DelayDo(2.5f, () => ShowAIOptionBubble(options)));
+                StartCoroutine(DelayDo(3f, () => ShowAIOptionBubble(options)));
             return;
         }
 

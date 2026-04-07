@@ -379,7 +379,7 @@ def chat(req: ChatRequest):
 
         # 语气策略：错1次温和引导，错2次稍微直接
         if wrong_count == 1:
-            tone_hint = "语气温和，像朋友聊天，用问句引导，不要给答案"
+            tone_hint = "语气温和，像朋友聊天，用问句引导，不要直接给答案"
         else:
             tone_hint = "语气稍微直接一点，但仍然用问句，可以稍微给点方向提示"
 
@@ -388,13 +388,23 @@ def chat(req: ChatRequest):
         玩家选择了：{selected}  ← 这是错的
         正确答案：{preset.get('correct', '')}
         玩家的迷思概念：{misconception_text}
-        追问角度提示：{socratic_angle}
-        本题已错{wrong_count}次
 
-        你的任务：生成一句苏格拉底式追问（40字以内），直接针对玩家选的这个具体错误选项。不要给答案，用问句引导他自己发现。
+        实验数据：
+        - 入射角：{req.incident_angle:.1f}度
+        - 折射角：{req.refract_angle:.1f}度
+        - 是否全反射：{'是' if req.is_total_reflection else '否'}
+        - 探索阶段：{req.exploration_stage}
+        - 本题已错{wrong_count}次
+
+        追问角度提示：{socratic_angle}
+
+        你的任务：
+        生成一句苏格拉底式追问，直接针对【{selected}】这个错误答案。
+        不要重复题目本身，也不要直接说"答案是X"。
+        要指出一个具体的观察方向，让玩家自己发现矛盾。
 
         回复格式（严格JSON，不要其他文字）：
-        {{"socratic":"一句苏格拉底追问，不超过40字，用问句结尾"}}
+        {{"socratic":"一句苏格拉底追问，30字以内，用问句结尾"}}
 
         {tone_hint}，不超过45字。"""
 
