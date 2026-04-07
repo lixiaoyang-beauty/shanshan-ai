@@ -275,7 +275,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void OnSliderChanged(float value)
     {
-        Debug.Log($"[OnSliderChanged] val={value} stage={stage}");
+        Debug.Log($"[OnSliderChanged] ENTER val={value} stage={stage} wc={waitingForChoice}");
         UpdateRayLines(value);
         if (stage < 2) return;
 
