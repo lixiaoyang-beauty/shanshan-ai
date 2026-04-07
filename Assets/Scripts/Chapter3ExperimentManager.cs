@@ -343,7 +343,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
             }
         }
 
-        // 等主预设反馈显示完（2秒）后，叠加苏格拉底追问
+        // 等主预设反馈显示完（2.5秒）后，叠加苏格拉底追问
         yield return new WaitForSeconds(2.5f);
         string display = !string.IsNullOrEmpty(socraticQuestion)
             ? "💡 " + socraticQuestion
@@ -352,50 +352,30 @@ public class Chapter3ExperimentManager : MonoBehaviour
     }
 
     // 苏格拉底追问后备库（MiniMax不可用时使用）
-    static readonly Dictionary<string, string[]> SOCRATIC_FALLBACK = new Dictionary<string, string[]>()
-    {
-        { "q_line_count",      new[]{ "想想看，光线碰到水面时会怎样？", "反射和折射是同时发生的吗？" } },
-        { "q_refraction_rule", new[]{ "入射角变大时，折射角往哪边偏？", "对比一下小角度和大角度的折射光方向？" } },
-        { "q_critical_angle",   new[]{ "折射角=90度时，这个入射角有特殊名字！", "超过临界角会怎样？" } },
-        { "q_prediction",       new[]{ "折射光是不是越来越暗了？", "光去哪了，注意看反射光！" } },
-        { "q_total_reflection", new[]{ "反射光变亮了！光是不是跑回去了？", "注意看反射光！" } },
-        { "q_verify",          new[]{ "回忆一下发现卡片里的两个条件？", "光从水到空气，角度要多大？" } },
-        { "q_coin",            new[]{ "从侧面看时，光线要经过哪个介质出去？", "倾斜角度大，入射角是大还是小？" } },
-    };
-
     string GetSocraticFallback(string qid)
     {
-        if (SOCRATIC_FALLBACK.TryGetValue(qid, out var arr))
-            return arr[UnityEngine.Random.Range(0, arr.Length)];
-        return "再仔细观察一下实验台！";
+        switch (qid)
+        {
+            case "q_line_count":       return "想想看，光线碰到水面时会怎样？";
+            case "q_refraction_rule":  return "入射角变大时，折射角往哪边偏？";
+            case "q_critical_angle":  return "折射角=90度时，这个入射角叫什么？";
+            case "q_prediction":      return "折射光是不是越来越暗了？";
+            case "q_total_reflection": return "反射光变亮了！光是不是跑回去了？";
+            case "q_verify":           return "回忆一下发现卡片里的两个条件？";
+            case "q_coin":             return "从侧面看时，光线要经过哪个介质出去？";
+            default:                   return "再仔细观察一下实验台！";
+        }
     }
+
+    // 章节结束时获取迷思概念摘要并展示面板
+    void ShowLearningSummary()
     {
         StartCoroutine(DoShowLearningSummary());
     }
 
     IEnumerator DoShowLearningSummary()
     {
-        using var req = new UnityWebRequest(shanShanServerUrl + "/trajectory/summary/" + sessionId, "GET");
-        req.downloadHandler = new DownloadHandlerBuffer();
-        yield return req.SendWebRequest();
-
-        string misconceptions = "";
-        int totalWrong = 0;
-
-        if (req.result == UnityWebRequest.Result.Success)
-        {
-            string json = req.downloadHandler.text;
-            int mIdx = json.IndexOf("\"total_wrong\":");
-            if (mIdx >= 0)
-            {
-                int nStart = mIdx + 14;
-                int nEnd = json.IndexOfAny(new char[] { ',', '}' }, nStart);
-                if (nEnd > nStart)
-                    totalWrong = int.TryParse(json.Substring(nStart, nEnd - nStart), out int v) ? v : 0;
-            }
-        }
-
-        // 迷思概念文本（基于 questionWrongCount，在 RecordWrongAnswer 中已更新）
+        // 基于本地 questionWrongCount 统计（不依赖后端）
         int totalWrongLocal = 0;
         foreach (var v in questionWrongCount.Values) totalWrongLocal += v;
 
@@ -718,30 +698,24 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (predictionMade) return;
         predictionMade = true;
-        wrongAttempts = 0;
+        wrongAttempts = 0;  // 每道新问题开始时重置错题计数
         currentQuestionId = "q_prediction";
-        StartCoroutine(ShanShanAsk("折射光越来越弱了，用好奇的语气问玩家：继续增大角度，折射光会怎样？", () => {
-            ShowChoiceBubble(
-                new[]{ "变得更强", "逐渐消失", "方向不变" },
-                new System.Action[]{
-                    () => OnPredictionSelected(0),
-                    () => OnPredictionSelected(1),
-                    () => OnPredictionSelected(2)
-                });
-        }));
+        StartCoroutine(ShanShanAsk("折射光越来越弱了，用好奇的语气问玩家：继续增大角度，折射光会怎样？选项：变得更强|逐渐消失|方向不变"));
     }
 
-    void OnPredictionSelected(int choice)
+    void OnPrediction(bool correct, string reply)
     {
         ClearBubbles();
         stage = 3;
         idleTimer = 0f; hintLevel = -1;
+        // 无论对错，都继续，给统一引导语+继续按钮
         ShanShanSayLocal("好有趣！我们一起来看看后面会发生什么！", true);
-        StartCoroutine(DelayDo(1f, ShowPredictionContinueButton));
+        StartCoroutine(DelayDo(1f, () => ShowPredictionContinueButton()));
     }
 
     void ShowPredictionContinueButton()
     {
+        // 继续探索按钮：推进阶段到3，解锁slider
         var btn = MakeActionButton("继续探索", CYAN,
             () => { stage = 3; idleTimer = 0f; hintLevel = -1; UnlockSlider(); ClearBubbles(); },
             V2(0.3f, 0.02f), V2(0.7f, 0.12f));
@@ -1152,27 +1126,24 @@ public class Chapter3ExperimentManager : MonoBehaviour
     private string[] aiCurrentOptions = new string[0];
     private int wrongAttempts = 0;  // 本题错了几次
 
-    // AI生成问题+选项，并显示
-    // 调用后端 /chat 接口，获取预设问题和选项
     // 预设问题文本后备库（API不可用时使用）
-    static readonly Dictionary<string, string> PRESET_QUESTION_FALLBACK = new Dictionary<string, string>()
-    {
-        { "q_line_count",       "哇！你能看到几条光线？" },
-        { "q_refraction_rule",  "入射角变大时，折射角怎么变？" },
-        { "q_critical_angle",    "折射角=90度时的入射角叫什么？" },
-        { "q_prediction",       "继续增大角度，折射光会怎样？" },
-        { "q_total_reflection", "哇！折射光消失了！光去哪了？" },
-        { "q_verify",           "发生全反射需要哪两个条件？" },
-        { "q_coin",             "从侧面观察古币时，入射角是大还是小？" },
-    };
-
-    // 获取预设问题文本（API不可用时的后备）
     string GetPresetQuestionFallback(string qid)
     {
-        if (PRESET_QUESTION_FALLBACK.TryGetValue(qid, out var q)) return q;
-        return "仔细观察实验台，选择正确答案吧！";
+        switch (qid)
+        {
+            case "q_line_count":       return "哇！你能看到几条光线？";
+            case "q_refraction_rule":  return "入射角变大时，折射角怎么变？";
+            case "q_critical_angle":   return "折射角=90度时的入射角叫什么？";
+            case "q_prediction":      return "继续增大角度，折射光会怎样？";
+            case "q_total_reflection": return "哇！折射光消失了！光去哪了？";
+            case "q_verify":           return "发生全反射需要哪两个条件？";
+            case "q_coin":            return "从侧面观察古币时，入射角是大还是小？";
+            default:                   return "仔细观察实验台，选择正确答案！";
+        }
     }
 
+    // AI生成问题+选项，并显示
+    // 调用后端 /chat 接口，获取预设问题和选项
     IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
     {
         string qid = currentQuestionId;
@@ -1188,23 +1159,22 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         yield return req.SendWebRequest();
 
-        string questionText = null;
-        string[] options = new string[0];
-
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
             Debug.Log("[ShanShanAsk] 收到响应: " + json);
 
             // 解析 question 字段
+            string question = "";
             int qIdx = json.IndexOf("\"question\":\"");
             if (qIdx >= 0) {
                 int qStart = qIdx + 12;
                 int qEnd = json.IndexOf("\"", qStart);
-                if (qEnd > qStart) questionText = json.Substring(qStart, qEnd - qStart);
+                if (qEnd > qStart) question = json.Substring(qStart, qEnd - qStart);
             }
 
             // 解析 options 数组
+            string[] options = new string[0];
             int optIdx = json.IndexOf("\"options\":[");
             if (optIdx >= 0) {
                 int arrStart = json.IndexOf("[", optIdx);
@@ -1221,13 +1191,24 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     options = optList.ToArray();
                 }
             }
+
+            ShanShanSayLocal(question, true);
+
+            if (options.Length > 0)
+            {
+                yield return new WaitForSeconds(1f);
+                onReplyDone?.Invoke();
+            }
+            else
+            {
+                onReplyDone?.Invoke();
+            }
+            yield break;
         }
 
-        // 显示问题文本（优先用API返回的，否则用后备）
-        string displayText = !string.IsNullOrEmpty(questionText) ? questionText : GetPresetQuestionFallback(qid);
+        // API 失败时：显示预设后备问题，调用回调（确保选项气泡出现）
+        string displayText = GetPresetQuestionFallback(qid);
         ShanShanSayLocal(displayText, true);
-
-        // 等1秒让玩家看清问题，然后调用回调（回调里显示选项）
         yield return new WaitForSeconds(1f);
         onReplyDone?.Invoke();
     }
