@@ -851,7 +851,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
         cRt.anchorMin = new Vector2(0.02f,0.02f);
         cRt.anchorMax = new Vector2(0.98f,0.14f);
         cRt.offsetMin = cRt.offsetMax = Vector2.zero;
-        bubbleContainer.AddComponent<Image>().color = new Color(0,0,0,0);
+        var bgImg = bubbleContainer.AddComponent<Image>();
+        bgImg.color = new Color(0,0,0,0);
+        bgImg.raycastTarget = false;  // 透明区域不阻挡点击
 
         float gap  = 0.01f;
         float btnW = (1f - gap * (options.Length + 1)) / options.Length;
@@ -906,6 +908,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
         extraButtons.Clear();
         waitingForChoice = false;  // 恢复idle提示
         idleTimer = 0f;
+        // 强制刷新Canvas，确保Raycast状态立即更新
+        Canvas.ForceUpdateCanvases();
     }
 
     // ══════════════════════════════════════════
@@ -1226,12 +1230,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // Slider锁定/解锁
     void LockSlider()
     {
+        Debug.Log("[LockSlider] 锁定slider");
         if (angleSlider != null) angleSlider.interactable = false;
         sliderLocked = true;
     }
 
     void UnlockSlider()
     {
+        Debug.Log("[UnlockSlider] 解锁slider");
         if (angleSlider != null) angleSlider.interactable = true;
         sliderLocked = false;
     }
