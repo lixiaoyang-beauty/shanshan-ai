@@ -342,14 +342,83 @@ def receive_learning_data(req: LearningDataRequest):
         trajectory.add_wrong(req.question_id, req.selected_option, misconception)
 
     # 构建苏格拉底追问（AI分析玩家迷思概念）
+    # 针对每道题给出具体的追问策略，让MiniMax生成有针对性的追问
+    qid = req.question_id or ""
+    wrong_opt = req.selected_option or ""
+
+    # 各问题的追问策略指引
+    QUESTION_GUIDANCE = {
+        "q_line_count": {
+            "misconception_map": {
+                "1条": "误以为只有入射光，忽略了反射和折射",
+                "2条": "混淆了入射光和反射光，或漏掉了折射"
+            },
+            "focus_hint": "光碰到水面时会同时产生反射和折射",
+            "socratic_angle": "从光源到水面，光是一起走还是分开走了？"
+        },
+        "q_refraction_rule": {
+            "misconception_map": {
+                "折射角会变小": "误以为入射角越大折射角越小",
+                "折射角不变": "不理解折射角随入射角变化的规律"
+            },
+            "focus_hint": "入射角变大，折射角跟着变",
+            "socratic_angle": "对比一下角度小时和角度大时，折射光偏向哪边？"
+        },
+        "q_critical_angle": {
+            "misconception_map": {
+                "折射角": "混淆了入射角和折射角",
+                "反射角": "混淆了反射和折射的定义"
+            },
+            "focus_hint": "折射角=90度时，这个入射角有特殊名字",
+            "socratic_angle": "折射角变成90度（即贴着水面走）时的入射角，叫什么呢？"
+        },
+        "q_total_reflection": {
+            "misconception_map": {
+                "光消失了": "误以为光消失了",
+                "光被水吸收了": "误以为光被介质吸收"
+            },
+            "focus_hint": "反射光变亮了，说明光反射回去了",
+            "socratic_angle": "注意看反射光——它变亮了！光去哪了？"
+        },
+        "q_verify": {
+            "misconception_map": {
+                "只要角度够大": "忽略了光从哪个介质到哪个介质",
+                "空气到水": "搞反了折射方向"
+            },
+            "focus_hint": "全反射需要①水到空气②角度>=临界角",
+            "socratic_angle": "回忆一下：光从水里射向空气容易全反射，还是从空气射向水？"
+        },
+        "q_coin": {
+            "misconception_map": {
+                "小于临界角": "误以为从侧面看角度小"
+            },
+            "focus_hint": "从侧面看时光线倾斜厉害，入射角很大",
+            "socratic_angle": "从侧面看时，光线要倾斜很大角度出去，入射角是大还是小？"
+        },
+    }
+
+    guidance = QUESTION_GUIDANCE.get(qid, {})
+    misconception_map = guidance.get("misconception_map", {})
+    socratic_angle = guidance.get("socratic_angle", "仔细观察实验台，答案就在现象里！")
+
+    misconception_text = misconception_map.get(wrong_opt, "对折射/反射规律有误解")
+
+    # 追问语气策略：第1次错用引导性追问，第2-3次错用更直接的追问
+    if req.wrong_count == 1:
+        tone_hint = "语气温和，像朋友聊天，用问句引导，不要给答案"
+    else:
+        tone_hint = "语气稍微直接一点，但仍然用问句，可以稍微给点方向提示"
+
     analysis_content = f"""【玩家答题情况】
 探索阶段：{req.exploration_stage}
 当前入射角：{req.current_angle:.1f}度
 本题错了几次：{req.wrong_count}次
-玩家选择了：{req.selected_option}
+玩家选择了：{wrong_opt}
 正确答案：{req.correct_answer}
+玩家的迷思概念：{misconception_text}
+追问角度提示：{socratic_angle}
 
-你的任务：根据玩家选择的答案，分析他的迷思概念是什么，生成一句苏格拉底式追问来引导他自己想通。不超过20字，像朋友聊天，不要直接给答案。"""
+{tone_hint}，不超过20字，生成一句苏格拉底式追问。"""
 
     messages = [
         {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
