@@ -890,6 +890,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
             EarnStar(2);
             AudioManager.PlayCorrect();
             StartCoroutine(FlashScreen(new Color(0.2f,1f,0.3f,0.3f)));
+            currentQuestionId = "q_coin";
             isShowingNextQuestion = true;
             StartCoroutine(ShanShanAsk("玩家答对了全反射条件，联系古币案件，问他从侧面看时入射角大还是小", () => {
                 ShowChoiceBubble(
@@ -915,6 +916,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         if (correct)
         {
+            currentQuestionId = "q_coin";
             isShowingNextQuestion = true;
             StartCoroutine(ShanShanAsk("玩家答对了古币问题，解释为什么从侧面看不到古币，引导回博物馆"));
             StartCoroutine(DelayDo(1.5f, ShowGoButton));

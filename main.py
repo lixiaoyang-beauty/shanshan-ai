@@ -377,11 +377,28 @@ def chat(req: ChatRequest):
         socratic_angle = guidance.get("socratic_angle", "仔细观察实验台，答案就在现象里！")
         misconception_text = misconception_map.get(selected, "对折射/反射规律有误解")
 
-        # 语气策略：错1次温和引导，错2次稍微直接
+        # 个性化分层策略：错次不同，追问角度和语气都不同
         if wrong_count == 1:
-            tone_hint = "语气温和，像朋友聊天，用问句引导，不要直接给答案"
+            # 第1次错：温和引导，指出一个具体观察方向，不否定玩家选择
+            tone_hint = (
+                "语气温和，像朋友聊天。不要否定玩家的选择，而是引导他观察一个他可能忽略的现象。"
+                "追问要指向一个【具体的视觉现象】，让玩家自己去对比。"
+            )
+            question_constraint = "一句苏格拉底追问，25字以内，用问句结尾。直接指出观察方向，不要重复题目。"
+        elif wrong_count == 2:
+            # 第2次错：稍微直接，指出玩家选错的原因，并给出更明确的观察线索
+            tone_hint = (
+                "语气稍微直接一点，但仍然用问句。可以稍微暗示玩家的想法和实际现象不一样。"
+                "这次要给出【更具体】的观察线索，帮助他找到矛盾点。"
+            )
+            question_constraint = "一句苏格拉底追问，30字以内，用问句结尾。指出错误原因，给出具体观察线索。"
         else:
-            tone_hint = "语气稍微直接一点，但仍然用问句，可以稍微给点方向提示"
+            # 第3次错：几乎接近讲解，但仍然用问句收尾
+            tone_hint = (
+                "语气可以更直接，快要接近答案了，但仍然要用问句收尾，不要直接说答案。"
+                "这次可以结合【实验现象和生活例子】来引导。"
+            )
+            question_constraint = "一句苏格拉底追问，35字以内，用问句结尾。可以给例子，但不要直接给答案。"
 
         analysis_content = f"""【玩家答题情况】
         当前问题：{preset.get('question', '')}
@@ -400,13 +417,12 @@ def chat(req: ChatRequest):
 
         你的任务：
         生成一句苏格拉底式追问，直接针对【{selected}】这个错误答案。
-        不要重复题目本身，也不要直接说"答案是X"。
-        要指出一个具体的观察方向，让玩家自己发现矛盾。
 
         回复格式（严格JSON，不要其他文字）：
-        {{"socratic":"一句苏格拉底追问，30字以内，用问句结尾"}}
+        {{"socratic":"追问内容"}}
 
-        {tone_hint}，不超过45字。"""
+        {question_constraint}
+        {tone_hint}"""
 
         messages = [
             {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
