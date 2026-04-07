@@ -370,10 +370,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // 章节结束时获取迷思概念摘要并展示面板
     void ShowLearningSummary()
     {
-        StartCoroutine(DoShowLearningSummary());
+        DoShowLearningSummary();
     }
 
-    IEnumerator DoShowLearningSummary()
+    void DoShowLearningSummary()
     {
         // 基于本地 questionWrongCount 统计（不依赖后端）
         int totalWrongLocal = 0;
