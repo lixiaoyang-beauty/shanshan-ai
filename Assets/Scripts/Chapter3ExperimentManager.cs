@@ -889,9 +889,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // 方案A：发送 question_id，后端返回预设问题和选项
     IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
     {
-        if (shanShanBusy) yield break;
-        shanShanBusy = true;
-        // 不重置 wrongAttempts，保持计数连续性
+        // 不再用 shanShanBusy 锁，因为 StartCoroutine 本身是队列执行的
 
         // 发送 question_id 获取预设问题和选项
         string body =
@@ -904,7 +902,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         req.SetRequestHeader("Content-Type", "application/json");
 
         yield return req.SendWebRequest();
-        shanShanBusy = false;
 
         if (req.result == UnityWebRequest.Result.Success)
         {
@@ -952,13 +949,11 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
                     ShowChoiceBubble(options, cbs);
                 }
-                shanShanBusy = false;
                 onReplyDone?.Invoke();
                 yield break;
             }
         }
         ShanShanSayLocal("闪闪暂时累了，继续观察实验台吧！", true);
-        shanShanBusy = false;
         onReplyDone?.Invoke();
     }
 
