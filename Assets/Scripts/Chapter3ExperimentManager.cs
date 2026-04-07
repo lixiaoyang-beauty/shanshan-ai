@@ -299,6 +299,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void RecordWrongAnswer(string qid, string selectedOpt, string correctOpt)
     {
+        // 记录迷思概念计数（用于学习报告）
+        if (!questionWrongCount.ContainsKey(qid)) questionWrongCount[qid] = 0;
+        questionWrongCount[qid]++;
         StartCoroutine(DoRecordWrongAnswer(qid, selectedOpt, correctOpt));
     }
 
@@ -321,6 +324,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         yield return req.SendWebRequest();
 
+        string socraticQuestion = null;
+
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
@@ -331,20 +336,39 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 int e = json.IndexOf("\"", s);
                 if (e > s)
                 {
-                    string sq = json.Substring(s, e - s);
-                    if (!string.IsNullOrEmpty(sq) && sq != "null")
-                    {
-                        // 等主反馈显示完（2秒）后，叠加显示AI追问
-                        yield return new WaitForSeconds(2.5f);
-                        ShanShanSayLocal("💡 " + sq, true);
-                    }
+                    string raw = json.Substring(s, e - s);
+                    if (!string.IsNullOrEmpty(raw) && raw != "null")
+                        socraticQuestion = raw;
                 }
             }
         }
+
+        // 等主预设反馈显示完（2秒）后，叠加苏格拉底追问
+        yield return new WaitForSeconds(2.5f);
+        string display = !string.IsNullOrEmpty(socraticQuestion)
+            ? "💡 " + socraticQuestion
+            : "💡 " + GetSocraticFallback(qid);
+        ShanShanSayLocal(display, true);
     }
 
-    // 章节结束时获取迷思概念摘要并展示面板
-    void ShowLearningSummary()
+    // 苏格拉底追问后备库（MiniMax不可用时使用）
+    static readonly Dictionary<string, string[]> SOCRATIC_FALLBACK = new Dictionary<string, string[]>()
+    {
+        { "q_line_count",      new[]{ "想想看，光线碰到水面时会怎样？", "反射和折射是同时发生的吗？" } },
+        { "q_refraction_rule", new[]{ "入射角变大时，折射角往哪边偏？", "对比一下小角度和大角度的折射光方向？" } },
+        { "q_critical_angle",   new[]{ "折射角=90度时，这个入射角有特殊名字！", "超过临界角会怎样？" } },
+        { "q_prediction",       new[]{ "折射光是不是越来越暗了？", "光去哪了，注意看反射光！" } },
+        { "q_total_reflection", new[]{ "反射光变亮了！光是不是跑回去了？", "注意看反射光！" } },
+        { "q_verify",          new[]{ "回忆一下发现卡片里的两个条件？", "光从水到空气，角度要多大？" } },
+        { "q_coin",            new[]{ "从侧面看时，光线要经过哪个介质出去？", "倾斜角度大，入射角是大还是小？" } },
+    };
+
+    string GetSocraticFallback(string qid)
+    {
+        if (SOCRATIC_FALLBACK.TryGetValue(qid, out var arr))
+            return arr[UnityEngine.Random.Range(0, arr.Length)];
+        return "再仔细观察一下实验台！";
+    }
     {
         StartCoroutine(DoShowLearningSummary());
     }
@@ -371,27 +395,33 @@ public class Chapter3ExperimentManager : MonoBehaviour
             }
         }
 
-        // 迷思概念文本（硬编码，作为后备；主要从后端读取）
-        string body = "本次学习你共遇到了以下迷思概念：\n";
-        if (questionWrongCount.Count > 0)
-        {
-            if (questionWrongCount.ContainsKey("q_line_count") && questionWrongCount["q_line_count"] > 0)
-                body += "  光线分解：误以为只有1条或2条光线\n";
-            if (questionWrongCount.ContainsKey("q_refraction_rule") && questionWrongCount["q_refraction_rule"] > 0)
-                body += "  折射规律：误以为入射角越大折射角越小\n";
-            if (questionWrongCount.ContainsKey("q_critical_angle") && questionWrongCount["q_critical_angle"] > 0)
-                body += "  临界角：对临界角概念不清晰\n";
-            if (questionWrongCount.ContainsKey("q_total_reflection") && questionWrongCount["q_total_reflection"] > 0)
-                body += "  全反射：误以为光消失了或被吸收\n";
-            if (questionWrongCount.ContainsKey("q_verify") && questionWrongCount["q_verify"] > 0)
-                body += "  全反射条件：对两个条件缺一不少\n";
-        }
-        else
+        // 迷思概念文本（基于 questionWrongCount，在 RecordWrongAnswer 中已更新）
+        int totalWrongLocal = 0;
+        foreach (var v in questionWrongCount.Values) totalWrongLocal += v;
+
+        string body;
+        if (totalWrongLocal == 0)
         {
             body = "太棒了！本次学习没有遇到迷思概念，所有概念都掌握得很好！";
         }
+        else
+        {
+            body = $"本次学习共答错 {totalWrongLocal} 道题，以下是你可能需要加强的概念：\n";
+            if (questionWrongCount.ContainsKey("q_line_count") && questionWrongCount["q_line_count"] > 0)
+                body += $"  光线分解：误以为只有1条或2条光线（错{questionWrongCount["q_line_count"]}次）\n";
+            if (questionWrongCount.ContainsKey("q_refraction_rule") && questionWrongCount["q_refraction_rule"] > 0)
+                body += $"  折射规律：误以为入射角越大折射角越小（错{questionWrongCount["q_refraction_rule"]}次）\n";
+            if (questionWrongCount.ContainsKey("q_critical_angle") && questionWrongCount["q_critical_angle"] > 0)
+                body += $"  临界角：对临界角概念不清晰（错{questionWrongCount["q_critical_angle"]}次）\n";
+            if (questionWrongCount.ContainsKey("q_total_reflection") && questionWrongCount["q_total_reflection"] > 0)
+                body += $"  全反射：误以为光消失了或被吸收（错{questionWrongCount["q_total_reflection"]}次）\n";
+            if (questionWrongCount.ContainsKey("q_verify") && questionWrongCount["q_verify"] > 0)
+                body += $"  全反射条件：对两个条件缺一不可（错{questionWrongCount["q_verify"]}次）\n";
+            if (questionWrongCount.ContainsKey("q_coin") && questionWrongCount["q_coin"] > 0)
+                body += $"  古币消失：对侧面角度与全反射关系不清晰（错{questionWrongCount["q_coin"]}次）\n";
+        }
 
-        ShowSummaryPanel(totalWrong, body);
+        ShowSummaryPanel(totalWrongLocal, body);
     }
 
     void ShowSummaryPanel(int totalWrong, string body)
@@ -1124,6 +1154,25 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     // AI生成问题+选项，并显示
     // 调用后端 /chat 接口，获取预设问题和选项
+    // 预设问题文本后备库（API不可用时使用）
+    static readonly Dictionary<string, string> PRESET_QUESTION_FALLBACK = new Dictionary<string, string>()
+    {
+        { "q_line_count",       "哇！你能看到几条光线？" },
+        { "q_refraction_rule",  "入射角变大时，折射角怎么变？" },
+        { "q_critical_angle",    "折射角=90度时的入射角叫什么？" },
+        { "q_prediction",       "继续增大角度，折射光会怎样？" },
+        { "q_total_reflection", "哇！折射光消失了！光去哪了？" },
+        { "q_verify",           "发生全反射需要哪两个条件？" },
+        { "q_coin",             "从侧面观察古币时，入射角是大还是小？" },
+    };
+
+    // 获取预设问题文本（API不可用时的后备）
+    string GetPresetQuestionFallback(string qid)
+    {
+        if (PRESET_QUESTION_FALLBACK.TryGetValue(qid, out var q)) return q;
+        return "仔细观察实验台，选择正确答案吧！";
+    }
+
     IEnumerator ShanShanAsk(string context, System.Action onReplyDone = null)
     {
         string qid = currentQuestionId;
@@ -1139,22 +1188,23 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         yield return req.SendWebRequest();
 
+        string questionText = null;
+        string[] options = new string[0];
+
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
             Debug.Log("[ShanShanAsk] 收到响应: " + json);
 
             // 解析 question 字段
-            string question = "";
             int qIdx = json.IndexOf("\"question\":\"");
             if (qIdx >= 0) {
                 int qStart = qIdx + 12;
                 int qEnd = json.IndexOf("\"", qStart);
-                if (qEnd > qStart) question = json.Substring(qStart, qEnd - qStart);
+                if (qEnd > qStart) questionText = json.Substring(qStart, qEnd - qStart);
             }
 
             // 解析 options 数组
-            string[] options = new string[0];
             int optIdx = json.IndexOf("\"options\":[");
             if (optIdx >= 0) {
                 int arrStart = json.IndexOf("[", optIdx);
@@ -1171,23 +1221,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     options = optList.ToArray();
                 }
             }
-
-            ShanShanSayLocal(question, true);
-
-            if (options.Length > 0)
-            {
-                yield return new WaitForSeconds(1f);
-                onReplyDone?.Invoke();
-            }
-            else
-            {
-                onReplyDone?.Invoke();
-            }
-            yield break;
         }
 
-        // API 失败时：显示 context 作为问题，调用回调
-        ShanShanSayLocal(context, true);
+        // 显示问题文本（优先用API返回的，否则用后备）
+        string displayText = !string.IsNullOrEmpty(questionText) ? questionText : GetPresetQuestionFallback(qid);
+        ShanShanSayLocal(displayText, true);
+
+        // 等1秒让玩家看清问题，然后调用回调（回调里显示选项）
         yield return new WaitForSeconds(1f);
         onReplyDone?.Invoke();
     }
