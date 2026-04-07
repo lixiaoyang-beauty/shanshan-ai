@@ -202,7 +202,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             float cur = angleSlider != null ? angleSlider.value : 15f;
             if (Mathf.Abs(cur - lastAngle) > 0.5f)
-            { idleTimer = 0f; hintLevel = -1; lastAngle = cur; }
+            {
+                idleTimer = 0f; hintLevel = -1; lastAngle = cur;
+                CheckStageProgression(cur);  // 每当slider值变化就检查阶段推进
+            }
             // 等待玩家选择时不触发提示
             else if (!isInDialogue && !shanShanBusy && !waitingForChoice)
             {
@@ -211,6 +214,74 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 else if (idleTimer > 60f && hintLevel < 1) { hintLevel = 1; GiveHint(1); }
                 else if (idleTimer > 30f && hintLevel < 0) { hintLevel = 0; GiveHint(0); }
             }
+        }
+    }
+
+    // 检查角度阈值，推进阶段
+    void CheckStageProgression(float value)
+    {
+        Debug.Log($"[CheckStageProgression] stage={stage} val={value} s2T={stage2Triggered} s3T={stage3Triggered} isTR={isTotalReflection}");
+
+        // 预测挑战
+        if (stage == 2 && !stage2Triggered && value > 20f && !isTotalReflection)
+        {
+            Debug.Log("[CheckStageProgression] 触发预测挑战！");
+            stage2Triggered = true;
+            LockSlider();
+            StartCoroutine(DelayDo(1f, ShowPredictionChallenge));
+            return;
+        }
+
+        // 折射规律
+        if (stage == 3 && !stage3Triggered && value > 38f && !isTotalReflection)
+        {
+            Debug.Log("[CheckStageProgression] 触发折射规律题！");
+            stage3Triggered = true;
+            stage = 4;
+            idleTimer = 0f; hintLevel = -1;
+            LockSlider();
+            StartCoroutine(DelayDo(0.8f, () => {
+                currentQuestionId = "q_refraction_rule";
+                StartCoroutine(ShanShanAsk("玩家正在探索折射规律，问他入射角变大时折射角怎么变", () => {
+                    ShowChoiceBubble(
+                        new[]{ "折射角会变大", "折射角会变小", "折射角不变" },
+                        new System.Action[]{
+                            () => OnRefractionRuleAnswer(true),
+                            () => OnRefractionRuleAnswer(false),
+                            () => OnRefractionRuleAnswer(false)
+                        });
+                }));
+            }));
+            return;
+        }
+
+        // 临界角
+        if (stage == 4 && !stage4Triggered && value > 45f && !isTotalReflection && refractionRuleAnswered)
+        {
+            Debug.Log("[CheckStageProgression] 触发临界角题！");
+            stage4Triggered = true;
+            LockSlider();
+            StartCoroutine(DelayDo(0.8f, () => {
+                currentQuestionId = "q_critical_angle";
+                StartCoroutine(ShanShanAsk("玩家接近临界角，折射光很弱，问他折射角=90度时的入射角叫什么", () => {
+                    ShowChoiceBubble(
+                        new[]{ "临界角", "折射角", "入射角", "反射角" },
+                        new System.Action[]{
+                            () => OnCriticalAngleAnswer(true),
+                            () => OnCriticalAngleAnswer(false),
+                            () => OnCriticalAngleAnswer(false),
+                            () => OnCriticalAngleAnswer(false)
+                        });
+                }));
+            }));
+            return;
+        }
+
+        // 全反射
+        if (stage >= 3 && isTotalReflection && !totalReflFound)
+        {
+            Debug.Log("[CheckStageProgression] 触发全反射！");
+            OnTotalReflectionFirst();
         }
     }
 
