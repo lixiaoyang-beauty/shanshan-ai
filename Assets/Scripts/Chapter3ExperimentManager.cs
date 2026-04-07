@@ -357,14 +357,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         switch (qid)
         {
-            case "q_line_count":       return "想想看，光线碰到水面时会怎样？";
-            case "q_refraction_rule":  return "入射角变大时，折射角往哪边偏？";
-            case "q_critical_angle":  return "折射角=90度时，这个入射角叫什么？";
-            case "q_prediction":      return "折射光是不是越来越暗了？";
-            case "q_total_reflection": return "反射光变亮了！光是不是跑回去了？";
-            case "q_verify":           return "回忆一下发现卡片里的两个条件？";
-            case "q_coin":             return "从侧面看时，光线要经过哪个介质出去？";
-            default:                   return "再仔细观察一下实验台！";
+            case "q_line_count":       return "咦，你再仔细看看～光线碰到水面时，是不是同时向好几个方向跑去了？";
+            case "q_refraction_rule":  return "入射角变大时，折射光是越来越"远离"还是越来越"靠近"水面呢？";
+            case "q_critical_angle":  return "折射角变成90度时的入射角，有个特别的名字，你知道是什么吗？";
+            case "q_prediction":      return "折射光越来越暗了——光慢慢消失了吗？还是去了别的地方？";
+            case "q_total_reflection": return "折射光消失了，但反射光那边……你有没有注意到什么不一样？";
+            case "q_verify":           return "全反射需要两个条件同时满足——光从哪到哪？角度要怎样？";
+            case "q_coin":             return "从侧面看古币时，光线要倾斜很大角度射出，入射角是大还是小呢？";
+            default:                   return "再仔细观察一下实验台，和闪闪一起发现更多秘密吧！";
         }
     }
 
@@ -1411,13 +1411,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         switch (questionId)
         {
-            case "q_line_count":     return "太棒了！入射光、反射光、折射光，三条全找到了！继续拖大角度，看看折射光会有什么变化～";
-            case "q_refraction_rule":return "就是这样！入射角越大，折射角也越大。继续增大角度，快要发生一件很神奇的事了……";
-            case "q_critical_angle": return "答对了！这个特殊角度就叫临界角！把角度调过临界角，看看会发生什么！";
-            case "q_total_reflection":return "没错！光全部反射回水里了——这就是全反射！太神奇了！";
-            case "q_verify":         return "完全正确！两个条件缺一不可，记住了吗！";
-            case "q_coin":           return "对！从侧面看古币，入射角超过临界角，光反射不出来，所以看不见！谜底揭开了！";
-            default:                 return "答对了！继续探索吧！";
+            case "q_line_count":     return "太棒了！入射光、反射光、折射光——三条全被你找到了！你注意到没有，反射光和折射光是一起出现的哦～继续拖大角度，看看会有什么新发现！";
+            case "q_refraction_rule":return "没错！入射角越大，折射角也跟着变大～这就是折射定律！想象一下筷子插进水里的样子，是不是也是这样的？好，继续增大角度，快要有神奇的事要发生了……";
+            case "q_critical_angle": return "答对了！这个特殊角度就叫做"临界角"！好有意思的名字对不对～来，现在把角度调到超过临界角，看看会发生什么！";
+            case "q_total_reflection":return "哇！太神奇了！你发现了"全反射"！折射光完全消失了——但等等，光真的不见了吗？你仔细看反射光那边，是不是反而变亮了？光其实全部跑回水里去了！";
+            case "q_verify":         return "完全正确！两个条件缺一不可——光要从水射向空气，而且角度要超过临界角！你记住了吗？好，现在我们把学到的一切和古币消失的谜题联系起来！";
+            case "q_coin":           return "叮——谜底揭开了！从侧面看时入射角非常大，超过了临界角，光发生全反射全部反射回水中，根本出不来，所以古币就"消失"了！哇，太厉害了！";
+            default:                 return "太棒了！继续探索吧，一定会有更多发现的！";
         }
     }
 
