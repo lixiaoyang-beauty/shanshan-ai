@@ -278,9 +278,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
         UpdateRayLines(value);
         if (stage < 2) return;
 
+        Debug.Log($"[SliderChanged] stage={stage} val={value} isTR={isTotalReflection} s3T={stage3Triggered} s2T={stage2Triggered}");
+
         // 猜测挑战
         if (stage == 2 && !stage2Triggered && value > 20f && !isTotalReflection)
         {
+            Debug.Log("[SliderChanged] 触发预测挑战！");
             stage2Triggered = true;
             LockSlider();  // 特定角度触发问题时锁定
             StartCoroutine(DelayDo(1f, ShowPredictionChallenge));
@@ -289,6 +292,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         // 折射规律选择题
         if (stage == 3 && !stage3Triggered && value > 38f && !isTotalReflection)
         {
+            Debug.Log("[SliderChanged] 触发折射规律题！");
             stage3Triggered = true;
             stage = 4;
             idleTimer = 0f; hintLevel = -1;
