@@ -472,11 +472,11 @@ public class Chapter3ExperimentManager : MonoBehaviour
             // 概念名（字号加大突出）
             MakeTMP("Concept", rowBg.transform,
                 V2(0.01f, 0.08f), V2(0.38f, 0.92f), V2(8, 2), V2(-4, -2),
-                concept, 18, CREAM, TextAlignmentOptions.MiddleLeft, true);
+                concept, 18, CREAM, TextAlignmentOptions.Left, true);
             // 错误次数
             MakeTMP("Count", rowBg.transform,
                 V2(0.39f, 0.08f), V2(0.55f, 0.92f), V2(4, 2), V2(-4, -2),
-                "✗ " + wrongCount + "次", 14, new Color(1f, 0.5f, 0.5f, 1f), TextAlignmentOptions.MiddleCenter, false);
+                "✗ " + wrongCount + "次", 14, new Color(1f, 0.5f, 0.5f, 1f), TextAlignmentOptions.Center, false);
             // 查看解析按钮
             MakeActionButton("查看解析", new Color(0.2f, 0.45f, 0.8f, 1f),
                 () => ShowMisconceptionDetail(concept, data),
