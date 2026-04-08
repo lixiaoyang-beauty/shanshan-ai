@@ -374,38 +374,36 @@ public class Chapter3ExperimentManager : MonoBehaviour
         DoShowLearningSummary();
     }
 
+    // 迷思概念详细分析数据：{概念名, 为什么错, 正确理解, 实验现象}
+    string[,] MISCONCEPTION_DATA = new string[,] {
+        { "光线分解", "误以为只有入射光一条光线，或只注意到反射光/折射光中的一条",
+          "光遇到水面时，同时发生反射和折射，一束光分成两条：反射光和折射光",
+          "slider从小往大拖，空气中同时出现入射光和反射光，水中同时出现折射光——三条光线始终同时存在" },
+        { "折射规律", "误以为入射角越大折射角越小，和筷子插水里的直观印象反了",
+          "入射角越大，折射角也越大，且折射角比入射角更靠近法线（更偏离界面）",
+          "slider从小往大拖，折射光越来越'远离'水面——注意观察折射光偏向哪边" },
+        { "临界角", "混淆了入射角和折射角，或不知道临界角是入射角的名称",
+          "当折射角=90度时，这时的入射角叫做临界角（水→空气临界角约48度）",
+          "slider拖到约48度时，折射光贴着水面走——再大一点折射光就消失了，那个角度就是临界角" },
+        { "全反射", "误以为光消失了或被水吸收了，没有考虑到光以反射形式返回",
+          "折射角达90度后继续增大，光不再折射，而是全部反射回水中——这就是全反射",
+          "slider超过临界角后，折射光完全消失，但反射光反而变亮——光全部反射回去了！" },
+        { "全反射条件", "忽略了'光从光密到光疏'的方向条件，或以为只要角度大就能全反射",
+          "全反射必须同时满足：①光从光密射向光疏（如水→空气）②入射角大于临界角",
+          "光从空气射向水不会发生全反射——只有从水里往外射且角度够大才行" },
+        { "古币消失", "误以为从侧面看古币时入射角很小",
+          "从侧面看时光线要倾斜很大角度射出，入射角远大于临界角，发生全反射",
+          "侧面看=光线倾斜大=入射角大=超过临界角=全反射=光出不来=看不见古币" },
+    };
+
     void DoShowLearningSummary()
     {
-        // 基于本地 questionWrongCount 统计（不依赖后端）
         int totalWrongLocal = 0;
         foreach (var v in questionWrongCount.Values) totalWrongLocal += v;
-
-        string body;
-        if (totalWrongLocal == 0)
-        {
-            body = "太棒了！本次学习没有遇到迷思概念，所有概念都掌握得很好！";
-        }
-        else
-        {
-            body = $"本次学习共答错 {totalWrongLocal} 道题，以下是你可能需要加强的概念：\n";
-            if (questionWrongCount.ContainsKey("q_line_count") && questionWrongCount["q_line_count"] > 0)
-                body += $"  光线分解：误以为只有1条或2条光线（错{questionWrongCount["q_line_count"]}次）\n";
-            if (questionWrongCount.ContainsKey("q_refraction_rule") && questionWrongCount["q_refraction_rule"] > 0)
-                body += $"  折射规律：误以为入射角越大折射角越小（错{questionWrongCount["q_refraction_rule"]}次）\n";
-            if (questionWrongCount.ContainsKey("q_critical_angle") && questionWrongCount["q_critical_angle"] > 0)
-                body += $"  临界角：对临界角概念不清晰（错{questionWrongCount["q_critical_angle"]}次）\n";
-            if (questionWrongCount.ContainsKey("q_total_reflection") && questionWrongCount["q_total_reflection"] > 0)
-                body += $"  全反射：误以为光消失了或被吸收（错{questionWrongCount["q_total_reflection"]}次）\n";
-            if (questionWrongCount.ContainsKey("q_verify") && questionWrongCount["q_verify"] > 0)
-                body += $"  全反射条件：对两个条件缺一不可（错{questionWrongCount["q_verify"]}次）\n";
-            if (questionWrongCount.ContainsKey("q_coin") && questionWrongCount["q_coin"] > 0)
-                body += $"  古币消失：对侧面角度与全反射关系不清晰（错{questionWrongCount["q_coin"]}次）\n";
-        }
-
-        ShowSummaryPanel(totalWrongLocal, body);
+        ShowSummaryPanel(totalWrongLocal);
     }
 
-    void ShowSummaryPanel(int totalWrong, string body)
+    void ShowSummaryPanel(int totalWrong)
     {
         var canvas = FindObjectOfType<Canvas>();
         if (canvas == null) return;
@@ -441,16 +439,78 @@ public class Chapter3ExperimentManager : MonoBehaviour
             V2(0f, 0.72f), V2(1f, 0.80f), V2(20, 5), V2(-20, -5),
             statText, 18, new Color(1f, 0.85f, 0.3f, 1f), TextAlignmentOptions.Center, false);
 
-        // 迷思概念正文
-        MakeTMP("Body", panel.transform,
-            V2(0f, 0.10f), V2(1f, 0.72f), V2(20, 8), V2(-20, -8),
-            body, 20, CREAM, TextAlignmentOptions.Top, false);
+        // 迷思概念列表区域（每行一个概念+错次+概念变清晰按钮）
+        float yStart = 0.70f;
+        float rowH = 0.09f;
+        int row = 0;
+
+        System.Action<string, string, int> AddMisconceptionRow = (string concept, string data, int wrongCount) => {
+            string misconception = "";
+            string[] parts = data.Split(new string[] { "||" }, System.StringSplitOptions.None);
+            if (parts.Length >= 1) misconception = parts[0];
+            float y = yStart - row * (rowH + 0.01f);
+            var rowBg = new GameObject("Row_" + concept);
+            rowBg.transform.SetParent(panel.transform, false);
+            var rowRt = rowBg.AddComponent<RectTransform>();
+            rowRt.anchorMin = new Vector2(0.02f, 1f - (row + 1) * (rowH + 0.01f) / 0.7f);
+            rowRt.anchorMax = new Vector2(0.98f, 1f - row * (rowH + 0.01f) / 0.7f);
+            rowRt.offsetMin = Vector2.zero;
+            rowRt.offsetMax = Vector2.zero;
+            rowBg.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.04f);
+            MakeTMP("Concept", rowBg.transform,
+                V2(0.01f, 0.1f), V2(0.32f, 0.9f), V2(8, 2), V2(-3, -2),
+                concept, 14, CREAM, TextAlignmentOptions.Left, false);
+            MakeTMP("Count", rowBg.transform,
+                V2(0.33f, 0.1f), V2(0.44f, 0.9f), V2(8, 2), V2(-3, -2),
+                "×" + wrongCount + "次", 13, new Color(1f, 0.5f, 0.5f, 1f), TextAlignmentOptions.Left, false);
+            MakeActionButton("概念变清晰", new Color(0.2f, 0.45f, 0.8f, 1f),
+                () => ShowMisconceptionDetail(concept, data),
+                V2(0.78f, 0.1f), V2(0.98f, 0.9f), rowBg.transform);
+            row++;
+        };
+
+        if (totalWrong == 0)
+        {
+            MakeTMP("AllClear", panel.transform,
+                V2(0f, 0.12f), V2(1f, 0.72f), V2(20, 5), V2(-20, -5),
+                "你对所有概念的理解都很清晰，继续保持！", 18, new Color(0.5f, 1f, 0.5f, 1f),
+                TextAlignmentOptions.Center, false);
+        }
+        else
+        {
+            if (questionWrongCount.ContainsKey("q_line_count") && questionWrongCount["q_line_count"] > 0)
+                AddMisconceptionRow("光线分解", MISCONCEPTION_DATA[0, 1] + "||" + MISCONCEPTION_DATA[0, 2] + "||" + MISCONCEPTION_DATA[0, 3], questionWrongCount["q_line_count"]);
+            if (questionWrongCount.ContainsKey("q_refraction_rule") && questionWrongCount["q_refraction_rule"] > 0)
+                AddMisconceptionRow("折射规律", MISCONCEPTION_DATA[1, 1] + "||" + MISCONCEPTION_DATA[1, 2] + "||" + MISCONCEPTION_DATA[1, 3], questionWrongCount["q_refraction_rule"]);
+            if (questionWrongCount.ContainsKey("q_critical_angle") && questionWrongCount["q_critical_angle"] > 0)
+                AddMisconceptionRow("临界角", MISCONCEPTION_DATA[2, 1] + "||" + MISCONCEPTION_DATA[2, 2] + "||" + MISCONCEPTION_DATA[2, 3], questionWrongCount["q_critical_angle"]);
+            if (questionWrongCount.ContainsKey("q_total_reflection") && questionWrongCount["q_total_reflection"] > 0)
+                AddMisconceptionRow("全反射", MISCONCEPTION_DATA[3, 1] + "||" + MISCONCEPTION_DATA[3, 2] + "||" + MISCONCEPTION_DATA[3, 3], questionWrongCount["q_total_reflection"]);
+            if (questionWrongCount.ContainsKey("q_verify") && questionWrongCount["q_verify"] > 0)
+                AddMisconceptionRow("全反射条件", MISCONCEPTION_DATA[4, 1] + "||" + MISCONCEPTION_DATA[4, 2] + "||" + MISCONCEPTION_DATA[4, 3], questionWrongCount["q_verify"]);
+            if (questionWrongCount.ContainsKey("q_coin") && questionWrongCount["q_coin"] > 0)
+                AddMisconceptionRow("古币消失", MISCONCEPTION_DATA[5, 1] + "||" + MISCONCEPTION_DATA[5, 2] + "||" + MISCONCEPTION_DATA[5, 3], questionWrongCount["q_coin"]);
+        }
 
         // 左：重新探索按钮
         MakeActionButton("重新探索试试", CYAN,
             () => {
                 Destroy(overlay);
-                // 重置实验状态
+                // 重置星星UI
+                starsEarned = 0;
+                for (int i = 0; i < 3; i++) {
+                    if (starImages[i] != null) {
+                        starImages[i].color = new Color(0.15f, 0.15f, 0.18f, 0.8f);
+                        var lbl = starImages[i].transform.Find("Lbl");
+                        if (lbl != null) {
+                            var t = lbl.GetComponent<TextMeshProUGUI>();
+                            if (t != null && t.text.StartsWith("★"))
+                                t.text = "☆" + t.text.Substring(1);
+                        }
+                    }
+                }
+                Hide(shanShanPanel);
+                ClearBubbles();
                 if (angleSlider != null) angleSlider.value = 15f;
                 currentIncidentAngle = 15f;
                 currentRefractAngle = 0f;
@@ -462,8 +522,11 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 refractionRuleAnswered = false;
                 wrongAttempts = 0;
                 questionWrongCount.Clear();
-                ClearBubbles();
-                UnlockSlider();
+                UpdateRayLines(15f);
+                HideAllRays();
+                sliderLocked = true;
+                if (angleSlider != null) angleSlider.interactable = false;
+                StartCoroutine(StartChapter());
             },
             V2(0.02f, 0.02f), V2(0.49f, 0.09f), panel.transform);
 
@@ -471,6 +534,78 @@ public class Chapter3ExperimentManager : MonoBehaviour
         MakeActionButton("继续回博物馆破案！", GOLD,
             () => { Destroy(overlay); StartAllyEnding(); },
             V2(0.51f, 0.02f), V2(0.98f, 0.09f), panel.transform);
+
+        StartCoroutine(PopIn(pRt));
+    }
+
+    // 迷思概念详情弹窗
+    void ShowMisconceptionDetail(string concept, string data)
+    {
+        string[] parts = data.Split(new string[] { "||" }, System.StringSplitOptions.None);
+        if (parts.Length < 3) return;
+        string misconception = parts[0];
+        string correct = parts[1];
+        string phenomenon = parts[2];
+
+        var canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+
+        var overlay = new GameObject("DetailOverlay");
+        overlay.transform.SetParent(canvas.transform, false);
+        FillRect(overlay);
+        overlay.AddComponent<Image>().color = new Color(0, 0, 0, 0.6f);
+
+        var panel = new GameObject("DetailPanel");
+        panel.transform.SetParent(overlay.transform, false);
+        var pRt = panel.AddComponent<RectTransform>();
+        pRt.anchorMin = new Vector2(0.18f, 0.18f);
+        pRt.anchorMax = new Vector2(0.82f, 0.82f);
+        pRt.offsetMin = pRt.offsetMax = Vector2.zero;
+        panel.AddComponent<Image>().color = NAVY2;
+        MakeBorder(panel, CYAN, 2f);
+
+        // 标题
+        MakeTMP("Title", panel.transform,
+            V2(0f, 0.88f), V2(1f, 0.96f), V2(15, 4), V2(-15, -4),
+            "「" + concept + "」概念详解", 22, CYAN, TextAlignmentOptions.Center, true);
+        MakeImg("Div1", panel.transform,
+            V2(0.02f, 0.86f), V2(0.98f, 0.88f), V2(0, 0), V2(0, 0),
+            new Color(0f, 0.82f, 1f, 0.3f));
+
+        float yNote = 0.84f;
+        // 你可能是这样想的
+        MakeTMP("MisconLabel", panel.transform,
+            V2(0.03f, yNote - 0.07f), V2(0.97f, yNote), V2(12, 2), V2(-12, -2),
+            "你可能是这样想的：", 14, new Color(1f, 0.6f, 0.6f, 1f), TextAlignmentOptions.Left, false);
+        MakeTMP("MisconText", panel.transform,
+            V2(0.03f, yNote - 0.19f), V2(0.97f, yNote - 0.07f), V2(12, 2), V2(-12, -2),
+            misconception, 16, CREAM, TextAlignmentOptions.TopLeft, false);
+        MakeImg("Div2", panel.transform,
+            V2(0.02f, yNote - 0.21f), V2(0.98f, yNote - 0.23f), V2(0, 0), V2(0, 0),
+            new Color(0f, 0.82f, 1f, 0.2f));
+
+        float yCorrect = yNote - 0.24f;
+        MakeTMP("CorrectLabel", panel.transform,
+            V2(0.03f, yCorrect - 0.07f), V2(0.97f, yCorrect), V2(12, 2), V2(-12, -2),
+            "实际上是这样的：", 14, new Color(0.6f, 1f, 0.6f, 1f), TextAlignmentOptions.Left, false);
+        MakeTMP("CorrectText", panel.transform,
+            V2(0.03f, yCorrect - 0.19f), V2(0.97f, yCorrect - 0.07f), V2(12, 2), V2(-12, -2),
+            correct, 16, CREAM, TextAlignmentOptions.TopLeft, false);
+        MakeImg("Div3", panel.transform,
+            V2(0.02f, yCorrect - 0.21f), V2(0.98f, yCorrect - 0.23f), V2(0, 0), V2(0, 0),
+            new Color(0f, 0.82f, 1f, 0.2f));
+
+        float yPhen = yCorrect - 0.24f;
+        MakeTMP("PhenLabel", panel.transform,
+            V2(0.03f, yPhen - 0.07f), V2(0.97f, yPhen), V2(12, 2), V2(-12, -2),
+            "对应实验现象：", 14, new Color(0.6f, 0.8f, 1f, 1f), TextAlignmentOptions.Left, false);
+        MakeTMP("PhenText", panel.transform,
+            V2(0.03f, yPhen - 0.19f), V2(0.97f, yPhen - 0.07f), V2(12, 2), V2(-12, -2),
+            phenomenon, 16, CREAM, TextAlignmentOptions.TopLeft, false);
+
+        MakeActionButton("我明白了！", GOLD,
+            () => Destroy(overlay),
+            V2(0.3f, 0.01f), V2(0.7f, 0.08f), panel.transform);
 
         StartCoroutine(PopIn(pRt));
     }
