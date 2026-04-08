@@ -336,12 +336,19 @@ def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
                 import json as _json
                 decoder = _json.JSONDecoder()
                 data, _ = decoder.raw_decode(response.text.strip())
+            print(f"[MiniMax] 原始响应: {data}")  # 调试：看实际返回结构
             choices = data.get("choices", [])
             if choices:
                 msg = choices[0].get("message", {})
-                content = msg.get("content", "") or msg.get("text", "")
-                if content and content.strip():
-                    return content.strip()
+                # MiniMax 可能用不同字段名，尝试多种路径
+                content = (
+                    msg.get("content") or
+                    msg.get("text") or
+                    (msg.get("content", [{}])[0].get("text") if isinstance(msg.get("content"), list) else None)
+                )
+                print(f"[MiniMax] 解析后content: '{content}'")  # 调试
+                if content and str(content).strip():
+                    return str(content).strip()
         else:
             print(f"[MiniMax] 非200状态码: {response.status_code}")
     except Exception as e:
