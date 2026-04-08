@@ -527,18 +527,19 @@ def chat(req: ChatRequest):
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(ai_message.strip())
                 guided_feedback = data.get("guided", "")[:65]
+                print(f"[/chat] MiniMax guided: '{guided_feedback}'")  # 调试
             except:
-                # JSON 解析失败时尝试直接用原文
+                # JSON 解析失败时：原文直接使用（去掉首尾空白）
                 raw = ai_message.strip()
-                if len(raw) <= 65 and "guided" not in raw:
-                    guided_feedback = raw
-                else:
-                    guided_feedback = ""
+                guided_feedback = raw[:65] if raw else ""
+                print(f"[/chat] JSON解析失败，使用原文: '{guided_feedback}'")
 
         # AI 失败时，本地兜底（C# 的 GetWrongHint 也会处理，这里是双保险）
         if not guided_feedback:
             guided_feedback = f"你选了「{selected}」，再仔细观察一下——现象是不是和你想的不太一样？"
+            print(f"[/chat] AI失败，使用本地兜底: '{guided_feedback}'")
 
+        print(f"[/chat] 返回 ChatResponse(feedback='{guided_feedback[:30]}...', next_action='socratic_retry')")
         return ChatResponse(
             correct=False,
             feedback=guided_feedback,
