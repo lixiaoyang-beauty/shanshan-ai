@@ -1450,13 +1450,16 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         yield return req.SendWebRequest();
 
+        Debug.Log($"[SendAnswerToAI] req.result={req.result}");
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
+            Debug.Log($"[SendAnswerToAI] 收到响应: {json.Substring(0, Mathf.Min(json.Length, 200))}");
             ProcessAIAnswerResponse(json);
         }
         else
         {
+            Debug.LogError($"[SendAnswerToAI] 请求失败: {req.error}");
             // 网络/服务器失败或超时 → 降级到本地预设
             wrongAttempts++;
             AudioManager.PlayWrong();
@@ -1471,6 +1474,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ProcessAIAnswerResponse(string json)
     {
+        Debug.Log($"[ProcessAI] 开始解析JSON，长度={json.Length}");
         string feedback = "", question = "", nextAction = "";
         bool correct = false;
         string[] options = new string[0];
@@ -1523,6 +1527,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
             }
         }
         catch { }
+
+        Debug.Log($"[ProcessAI] 解析结果: feedback='{feedback}', nextAction='{nextAction}', correct={correct}, question='{question}', options.Count={options.Length}");
 
         // 预测挑战：无论对错都显示衔接语+继续按钮，不评判对错
         if (currentQuestionId == "q_prediction")
