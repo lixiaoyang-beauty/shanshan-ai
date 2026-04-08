@@ -454,6 +454,45 @@ def chat(req: ChatRequest):
             options=PRESET_QUESTIONS[qid].get("options") if qid in PRESET_QUESTIONS else preset.get("options", [])
         )
 
+    # 情况3：玩家自由提问（AskBtn）→ MiniMax 生成回答
+    if req.question and not qid:
+        free_question_prompt = f"""【玩家自由提问】
+        探索阶段：{req.exploration_stage}
+        当前入射角：{req.incident_angle:.1f}度
+        折射角：{req.refract_angle:.1f}度
+        是否全反射：{'是' if req.is_total_reflection else '否'}
+        玩家的问题是：{req.question}
+
+        你是"闪闪"，艾莉博士的AI助理，用轻松友好的语气回答玩家的问题。
+        要求：1.不直接给答案 2.不超过3句话 3.必须以问句结尾 4.不用emoji 5.回复不超过45个汉字
+        如果玩家问的问题和当前实验现象有关，要引导他结合实验观察来思考。"""
+
+        messages = [
+            {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
+            {"role": "user", "name": "柯南", "content": free_question_prompt}
+        ]
+
+        raw = call_minimax(messages, max_tokens=200)
+
+        reply = ""
+        if raw and raw.strip():
+            try:
+                import json
+                data = json.loads(raw)
+                reply = data.get("content", "") or data.get("text", "") or raw.strip()
+            except:
+                reply = raw.strip()
+        else:
+            reply = "让我想想……嗯，我也有点不确定，我们一起继续观察吧！"
+
+        return ChatResponse(
+            correct=False,
+            feedback="",
+            next_action="free_answer",
+            question=reply[:50] if len(reply) > 50 else reply,
+            options=[]
+        )
+
     return ChatResponse(correct=False, feedback="再想想看？", next_action="retry")
 
 
