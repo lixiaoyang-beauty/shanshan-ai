@@ -522,15 +522,25 @@ def chat(req: ChatRequest):
 
         guided_feedback = ""
         if ai_message and ai_message.strip():
+            raw = ai_message.strip()
+            # 去掉 Markdown 代码块围栏（MiniMax 有时会自动加上）
+            raw = raw.strip()
+            if raw.startswith("```"):
+                lines = raw.split("\n")
+                # 去掉首行 ```json 和末行 ```
+                if len(lines) >= 2 and lines[0].strip().startswith("```"):
+                    lines = lines[1:]
+                if len(lines) >= 1 and lines[-1].strip().startswith("```"):
+                    lines = lines[:-1]
+                raw = "\n".join(lines).strip()
             try:
                 import json
                 decoder = json.JSONDecoder()
-                data, _ = decoder.raw_decode(ai_message.strip())
+                data, _ = decoder.raw_decode(raw)
                 guided_feedback = data.get("guided", "")[:65]
-                print(f"[/chat] MiniMax guided: '{guided_feedback}'")  # 调试
+                print(f"[/chat] MiniMax guided: '{guided_feedback}'")
             except:
-                # JSON 解析失败时：原文直接使用（去掉首尾空白）
-                raw = ai_message.strip()
+                # JSON 解析仍失败：原文直接使用
                 guided_feedback = raw[:65] if raw else ""
                 print(f"[/chat] JSON解析失败，使用原文: '{guided_feedback}'")
 
