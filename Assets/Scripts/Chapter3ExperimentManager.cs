@@ -1610,7 +1610,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (nextAction == "socratic_retry")
         {
             AudioManager.PlayWrong();
-            wrongAttempts++;
+            // wrongAttempts已在SendAnswerToAI()里+1，此处不重复累加
             learningTracker?.OnAnswerRecorded("ai_wrong");
             // AI 个性化引导反馈
             ShanShanSayLocal(feedback, true);
@@ -1623,9 +1623,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
             return;
         }
 
-        // 答错（第1次或第2次）→ 分层提示 + 重新显示相同选项
+        // 答错兜底（不应该到达，除非解析出错）→ 分层提示 + 重新显示相同选项
+        // 注意：wrongAttempts已在SendAnswerToAI()里+1，此处不重复
         AudioManager.PlayWrong();
-        wrongAttempts++;
         learningTracker?.OnAnswerRecorded("ai_wrong");
         ShanShanSayLocal(GetWrongHint(currentQuestionId, wrongAttempts), true);
         if (aiCurrentOptions.Length > 0)

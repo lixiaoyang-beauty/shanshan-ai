@@ -507,7 +507,7 @@ def chat(req: ChatRequest):
 - {depth_guide}
 - 句子要自然流畅，像朋友说话，不要像试题解析
 - 结尾必须是问句
-- 不超过60字
+- 不超过50字（重要：输出前请数清楚，确保不超过50个汉字）
 - 严禁出现「正确答案是」「应该选」「答案是」等直接泄底的话
 
 回复格式（严格JSON，不含其他文字）：
@@ -537,11 +537,11 @@ def chat(req: ChatRequest):
                 import json
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(raw)
-                guided_feedback = data.get("guided", "")[:65]
+                guided_feedback = data.get("guided", "")[:50]
                 print(f"[/chat] MiniMax guided: '{guided_feedback}'")
             except:
                 # JSON 解析仍失败：原文直接使用
-                guided_feedback = raw[:65] if raw else ""
+                guided_feedback = raw[:50] if raw else ""
                 print(f"[/chat] JSON解析失败，使用原文: '{guided_feedback}'")
 
         # AI 失败时，本地兜底（C# 的 GetWrongHint 也会处理，这里是双保险）
