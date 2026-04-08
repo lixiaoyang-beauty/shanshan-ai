@@ -1446,7 +1446,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
         req.downloadHandler = new DownloadHandlerBuffer();
         req.SetRequestHeader("Content-Type", "application/json");
-        req.timeout = 6;  // 超时6秒，超时降级到本地预设
+        req.timeout = 30;  // 超时30秒，给AI推理足够时间
 
         yield return req.SendWebRequest();
 
