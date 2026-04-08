@@ -37,6 +37,9 @@ class ChatRequest(BaseModel):
     is_total_reflection: bool = False
     refract_angle: float = 0
     exploration_stage: int = 0
+    # 答题历史（个性化用）
+    answer_sequence: str = ""      # 本题历次选项，逗号分隔，如 "1条,2条"
+    global_wrong_topics: int = 0   # 这局共在几道题上出过错
 
 
 class ChatResponse(BaseModel):
@@ -127,44 +130,100 @@ LECTURES = {
 QUESTION_GUIDANCE = {
     "q_line_count": {
         "misconception_map": {
-            "1条": "误以为只有入射光，忽略了反射光和折射光也是光线",
-            "2条": "混淆了入射光和反射光，或漏掉了折射光",
+            "1条": (
+                "这个孩子脑子里只有「一束光从A直走到B」的直觉，"
+                "完全没有意识到光遇到两种介质的界面时会同时分裂成两条——一条反射回去、一条折射进去。"
+                "他盯着入射光看，却没有往水面两侧追踪光的走向。"
+                "引导方向：让他注意光源射出后、水面上同时有几个地方在发光。"
+            ),
+            "2条": (
+                "这个孩子注意到光分裂了，找到了两条，但漏掉了第三条。"
+                "最常见情形：找到了反射光和折射光，却把入射光当成了其中一条算进去，导致重复计数；"
+                "或者找到了入射光和反射光，漏掉了方向偏折不那么明显的折射光。"
+                "他知道「不止一条」，但对三条光的名字和来源还没有清晰区分。"
+                "引导方向：帮他数清楚——光从哪来（入射），打到水面后往哪去了（反射往回、折射往另一侧）。"
+            ),
         },
-        "socratic_angle": "从光源到水面，光是一起走还是分开走了？"
     },
     "q_refraction_rule": {
         "misconception_map": {
-            "折射角会变小": "误以为入射角越大折射角越小，和筷子插进水里的现象混淆",
-            "折射角不变": "不理解折射角会随入射角变化而变化",
+            "折射角会变小": (
+                "这个孩子把「折射光靠近法线」和「折射角变小」搞混了。"
+                "他可能以为光折射后方向压得越来越「陡」，就等于折射角越来越小——"
+                "但实际上角度是从法线量的，入射角增大时折射角也在增大，只是比入射角小。"
+                "引导方向：让他对比角度很小时和角度很大时的折射光线，看看它离法线是更近了还是更远了。"
+            ),
+            "折射角不变": (
+                "这个孩子以为折射角是一个固定值，与入射角无关。"
+                "他可能还没有建立「角度越大，折射越厉害」的物理直觉。"
+                "引导方向：让他慢慢拖动滑块，亲眼观察折射光是不是随角度在动。"
+            ),
         },
-        "socratic_angle": "对比一下：角度小的时候折射光偏向哪边，角度大的时候偏向哪边？"
     },
     "q_critical_angle": {
         "misconception_map": {
-            "折射角": "混淆了入射角和折射角的定义",
-            "反射角": "混淆了反射和折射的不同概念",
+            "折射角": (
+                "这个孩子选了「折射角」，说明他搞混了主语——"
+                "题目问的是「此刻的入射角叫什么名字」，他却回答了「折射角」。"
+                "这是语言层面的混淆：折射角已经等于90度了，"
+                "而我们要给起名字的是此时的那个入射角，不是折射角本身。"
+                "引导方向：区分「折射角=90度」（这是条件）和「此时的入射角叫什么」（这是问题）。"
+            ),
+            "反射角": (
+                "这个孩子把全反射（折射消失）和反射角联系在一起，"
+                "以为折射光消失时，特殊的是反射角。"
+                "但临界角是折射角刚好变成90度时的那个入射角，和反射角无关。"
+                "引导方向：让他注意此刻折射光在哪——是不是正好贴着水面走，对应90度？"
+            ),
+            "入射角": (
+                "这个孩子知道答案和入射角有关，但不知道有个专门名字，"
+                "于是直接选了「入射角」。他的理解方向是对的，只差「临界角」这个专有名词。"
+                "引导方向：轻推一步——这个特殊状态的入射角有个专门的名字，叫「临界」角。"
+            ),
         },
-        "socratic_angle": "折射角变成90度（贴着水面走）时的入射角，有特别的名字——叫什么？"
     },
     "q_total_reflection": {
         "misconception_map": {
-            "光消失了": "误以为光凭空消失，没有考虑到光的反射",
-            "光被水吸收了": "误以为光被介质吸收了",
+            "光消失了": (
+                "这个孩子只盯着折射光那一侧看，看到折射光不见了就认为光消失了，"
+                "完全没有注意到反射光那侧其实变亮了——光不是没了，是全跑回水里去了。"
+                "引导方向：让他把目光转向反射光一侧，问他那边是不是突然变亮了。"
+            ),
+            "光被水吸收了": (
+                "这个孩子没有观察到现象，在猜——「光不见了，那肯定被什么吸收了」。"
+                "他缺少「能量守恒」的直觉：光的能量不会凭空消失，"
+                "要么折射出去，要么反射回来，只有这两条路。"
+                "引导方向：让他问自己——反射光变亮了还是变暗了？那些能量去了哪里？"
+            ),
         },
-        "socratic_angle": "注意看反射光——它是不是变亮了？光去哪了？"
     },
     "q_verify": {
         "misconception_map": {
-            "只要角度够大": "忽略了光要从哪个介质到哪个介质",
-            "空气到水": "搞反了全反射的方向条件",
+            "光从空气射向水，角度越大越好": (
+                "这个孩子把全反射的方向搞反了。"
+                "全反射只发生在光从「光密」介质射向「光疏」介质时（水→空气），"
+                "从空气射向水时，光只会折射进去，不会全反射。"
+                "引导方向：回忆一下，刚才实验里光是从哪里射向哪里的，"
+                "是空气射向水，还是水射向空气？"
+            ),
+            "只要角度够大就会全反射": (
+                "这个孩子记住了「角度要够大」，但忘了还有一个前提："
+                "必须是光从光密介质（水）射向光疏介质（空气），缺一不可。"
+                "他以为随便哪个方向只要角度大就能全反射。"
+                "引导方向：问他，如果从空气射向水，角度再大会全反射吗？让他对比实验里的条件。"
+            ),
         },
-        "socratic_angle": "回忆一下：光从水里射向空气容易全反射，还是从空气射向水？"
     },
     "q_coin": {
         "misconception_map": {
-            "小于临界角": "误以为从侧面看入射角小",
+            "小于临界角": (
+                "这个孩子没有建立「侧面=大角度」的空间直觉。"
+                "他可能以为「侧面看」和「斜看」是一回事，或者凭感觉觉得侧面的角度并不算大。"
+                "实际上从极度侧面看时，光线几乎平着打向水面，入射角接近90度，远超临界角。"
+                "引导方向：让他想象自己趴在桌边从侧面看一枚硬币——光线几乎是「横着」射向水面的，"
+                "角度大不大？"
+            ),
         },
-        "socratic_angle": "从侧面看时，光线要倾斜很大角度出去，入射角是大还是小？"
     },
 }
 
@@ -336,7 +395,7 @@ SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯
 柯南在调查博物馆古币消失案件，向艾莉博士求助。艾莉博士给了柯南一副光路追踪眼镜和虚拟实验台，让他探索光的折射和全反射现象，揭开古币消失的秘密。
 
 【性格】好奇、略带惊讶、像朋友一样交流，语气轻松自然。
-【铁律】1. 永远不直接给答案 2. 每次不超过3句话 3. 必须以问句结尾 4. 不用emoji 5. 回复不超过45个汉字"""
+【铁律】1. 永远不直接给答案 2. 每次不超过3句话 3. 必须以问句结尾 4. 不用emoji 5. 回复不超过60个汉字"""
 
 
 # ========== /chat 接口 ==========
@@ -377,84 +436,102 @@ def chat(req: ChatRequest):
             feedback = LECTURES[qid]
             return ChatResponse(correct=False, feedback=feedback, next_action="lecture")
 
-        # 调用 MiniMax 生成针对这道题、这个具体错误选项的个性化追问
+        # 解析答题序列
+        seq_list = [s.strip() for s in req.answer_sequence.split(",") if s.strip()] if req.answer_sequence else []
+        seq_display = " → ".join(seq_list) if len(seq_list) > 1 else selected
+
+        # 读取针对这道题、这个具体错误选项的认知分析
         guidance = QUESTION_GUIDANCE.get(qid, {})
         misconception_map = guidance.get("misconception_map", {})
-        socratic_angle = guidance.get("socratic_angle", "仔细观察实验台，答案就在现象里！")
-        misconception_text = misconception_map.get(selected, "对折射/反射规律有误解")
+        # 找到最匹配的迷思描述（模糊匹配：selected 包含在 key 中即命中）
+        misconception_text = next(
+            (v for k, v in misconception_map.items() if k in selected or selected in k),
+            f"对「{selected}」这个选项有误解，具体原因不明"
+        )
 
-        # 个性化分层策略：错次不同，引导反馈的深度和直接程度都不同
+        # 分层策略：错次不同，引导的深度和方式不同
         if wrong_count == 1:
-            # 第1次错：温和引导，解释"为什么可能感觉对"，引导重新观察一个现象
-            tone_hint = (
-                "语气温和，像朋友聊天。不要否定玩家的选择，而是引导他关注一个他可能忽略的具体现象。 "
-                "先指出'你可能是这样想的'，再引导他重新观察。回复要像朋友聊天，不要像老师。"
+            depth_guide = (
+                "第1次答错，语气温和像朋友。"
+                "不否定他，而是帮他发现自己「忽略了什么」。"
+                "用「你可能觉得…但你注意到…了吗？」的结构，"
+                "引导他去观察一个具体的、他此刻能看到的现象。"
             )
-            structure = "先说'你可能觉得...'（简述玩家的迷思），再说'但实际上...'（简短解释现象），最后用问句引导观察。"
         elif wrong_count == 2:
-            # 第2次错：稍微直接，明确指出矛盾，给更具体的观察线索
-            tone_hint = (
-                "语气稍微直接一点，但仍然用问句收尾。明确指出玩家的想法和实际现象不一样在什么地方，"
-                "给出具体的观察线索帮助他找到矛盾点。"
+            depth_guide = (
+                "第2次答错了，语气稍微直接。"
+                "承认他看到的部分是对的，再明确指出哪里有矛盾。"
+                "给他一个具体的观察动作，问句收尾。"
             )
-            structure = "直接说'你选了[选项]，但实际上...'（指出矛盾），给出1个具体观察指引，用问句收尾。"
         else:
-            # 第3次错：接近讲解，可给生活例子，但不能用"答案是X"直接给答案
-            tone_hint = (
-                "语气可以更直接，快要接近答案了。结合生活现象举例，但严禁直接说'正确答案是X'。"
-                "仍然要用问句收尾，让玩家自己得出结论。"
+            depth_guide = (
+                "第3次答错，可以结合生活类比来解释为什么，"
+                "给出非常明确的观察方向，问句收尾。"
+                "但绝对不能直接说出正确答案。"
             )
-            structure = "结合生活现象解释'为什么'，给出明确的观察方向，用开放性问题收尾。"
 
-        analysis_content = f"""【玩家答题情况】
-        当前问题：{preset.get('question', '')}
-        玩家选择了：{selected}  ← 这是错的
-        正确答案：{preset.get('correct', '')}
-        玩家的迷思概念：{misconception_text}
+        # 全局学习状态描述
+        global_note = ""
+        if req.global_wrong_topics >= 3:
+            global_note = f"（注意：这个孩子这局已经在{req.global_wrong_topics}道题上答错过，说明他对整个折射/反射体系的理解都还比较模糊，需要更基础的引导。）"
+        elif req.global_wrong_topics >= 2:
+            global_note = f"（这个孩子这局在{req.global_wrong_topics}道题上答错，有一定的基础误解。）"
 
-        实验数据：
-        - 入射角：{req.incident_angle:.1f}度
-        - 折射角：{req.refract_angle:.1f}度
-        - 是否全反射：{'是' if req.is_total_reflection else '否'}
-        - 探索阶段：{req.exploration_stage}
-        - 本题已错{wrong_count}次
+        # 答题序列描述
+        seq_note = ""
+        if len(seq_list) >= 2:
+            seq_note = f"他这道题的答题轨迹是：{seq_display}。上一次选的是「{seq_list[-2]}」，这次换成了「{selected}」——说明他在尝试，但方向还没对。"
+        else:
+            seq_note = f"这是他第一次答错这道题，选了「{selected}」。"
 
-        追问角度提示：{socratic_angle}
+        analysis_content = f"""你是「闪闪」，正在陪一个小学生「柯南」做光学实验。现在他答错了一道题，你需要帮他发现自己哪里想错了。
 
-        你的任务：
-        生成一句【引导反馈】，直接针对【{selected}】这个错误答案。
-        格式要求：{structure}
-        严禁出现"正确答案是X"、"答案是X"等直接泄底语句。
+【他现在的状态】
+{seq_note}
+{global_note}
+当前实验：入射角 {req.incident_angle:.1f}度，折射角 {req.refract_angle:.1f}度，{'此时已发生全反射' if req.is_total_reflection else '尚未发生全反射'}。
 
-        回复格式（严格JSON，不要其他文字）：
-        {{"guided":"一句引导反馈，不超过45字"}}
+【他为什么会选「{selected}」——认知分析】
+{misconception_text}
 
-        {tone_hint}"""
+【你的任务】
+根据上面的认知分析，生成1句【引导反馈】，帮他发现自己的思维漏洞。
+要求：
+- {depth_guide}
+- 句子要自然流畅，像朋友说话，不要像试题解析
+- 结尾必须是问句
+- 不超过60字
+- 严禁出现「正确答案是」「应该选」「答案是」等直接泄底的话
+
+回复格式（严格JSON，不含其他文字）：
+{{"guided":"引导反馈内容"}}"""
 
         messages = [
             {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
             {"role": "user", "name": "闪闪", "content": analysis_content}
         ]
 
-        ai_message = call_minimax(messages, max_tokens=200)
+        ai_message = call_minimax(messages, max_tokens=250)
 
         guided_feedback = ""
         if ai_message and ai_message.strip():
             try:
                 import json
-                # raw_decode 只解析第一个 JSON 对象，忽略 extra data
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(ai_message.strip())
-                guided_feedback = data.get("guided", "")[:50]
+                guided_feedback = data.get("guided", "")[:65]
             except:
-                guided_feedback = ai_message.strip()[:50]
+                # JSON 解析失败时尝试直接用原文
+                raw = ai_message.strip()
+                if len(raw) <= 65 and "guided" not in raw:
+                    guided_feedback = raw
+                else:
+                    guided_feedback = ""
 
-        # MiniMax 失败时，用预设引导反馈兜底
+        # AI 失败时，本地兜底（C# 的 GetWrongHint 也会处理，这里是双保险）
         if not guided_feedback:
-            guided_feedback = f"你选了「{selected}」——再观察一下，现象是不是和你想的不太一样？"
+            guided_feedback = f"你选了「{selected}」，再仔细观察一下——现象是不是和你想的不太一样？"
 
-        # feedback = MiniMax 个性化引导反馈（分层因 wrong_count 而不同）
-        # question = 原问题（1.5秒后显示，帮玩家回忆题目）
         return ChatResponse(
             correct=False,
             feedback=guided_feedback,

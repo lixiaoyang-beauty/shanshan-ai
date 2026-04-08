@@ -1406,6 +1406,7 @@ GameObject:
   m_Component:
   - component: {fileID: 897055713}
   - component: {fileID: 897055712}
+  - component: {fileID: 897055714}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -1445,6 +1446,7 @@ MonoBehaviour:
   chineseFont: {fileID: 11400000, guid: 1b533e5cc7003b94db7e7c21296d93db, type: 2}
   n1: 1.33
   n2: 1
+  learningTracker: {fileID: 897055714}
 --- !u!4 &897055713
 Transform:
   m_ObjectHideFlags: 0
@@ -1460,6 +1462,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &897055714
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 897055710}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b0ac2960549c0b4c87e2d90fbcb4ab6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  serverUrl: https://shanshan-ai-production.up.railway.app
+  sessionId: player1
+  sendInterval: 5
+  stagnantThreshold: 20
+  chapterManager: {fileID: 897055712}
 --- !u!1 &976720650
 GameObject:
   m_ObjectHideFlags: 0

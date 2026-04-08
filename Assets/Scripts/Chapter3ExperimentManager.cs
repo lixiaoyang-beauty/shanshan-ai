@@ -78,6 +78,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // 每道题的错题次数
     private Dictionary<string, int> questionWrongCount = new Dictionary<string, int>();
 
+    // 每道题的答错序列（用于个性化反馈）
+    private Dictionary<string, List<string>> questionAnswerHistory = new Dictionary<string, List<string>>();
+
     // 星星
     private Image[] starImages = new Image[3];
     private int starsEarned = 0;
@@ -247,9 +250,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     ShowChoiceBubble(
                         new[]{ "折射角会变大", "折射角会变小", "折射角不变" },
                         new System.Action[]{
-                            () => OnRefractionRuleAnswer(true),
-                            () => OnRefractionRuleAnswer(false),
-                            () => OnRefractionRuleAnswer(false)
+                            () => OnRefractionRuleAnswer(true, "折射角会变大"),
+                            () => OnRefractionRuleAnswer(false, "折射角会变小"),
+                            () => OnRefractionRuleAnswer(false, "折射角不变")
                         });
                 }));
             }));
@@ -268,10 +271,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     ShowChoiceBubble(
                         new[]{ "临界角", "折射角", "入射角", "反射角" },
                         new System.Action[]{
-                            () => OnCriticalAngleAnswer(true),
-                            () => OnCriticalAngleAnswer(false),
-                            () => OnCriticalAngleAnswer(false),
-                            () => OnCriticalAngleAnswer(false)
+                            () => OnCriticalAngleAnswer(true, "临界角"),
+                            () => OnCriticalAngleAnswer(false, "折射角"),
+                            () => OnCriticalAngleAnswer(false, "入射角"),
+                            () => OnCriticalAngleAnswer(false, "反射角")
                         });
                 }));
             }));
@@ -303,6 +306,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
         // 记录迷思概念计数（用于学习报告）
         if (!questionWrongCount.ContainsKey(qid)) questionWrongCount[qid] = 0;
         questionWrongCount[qid]++;
+        // 记录答错序列（用于个性化引导）
+        if (!questionAnswerHistory.ContainsKey(qid)) questionAnswerHistory[qid] = new List<string>();
+        questionAnswerHistory[qid].Add(selectedOpt);
         StartCoroutine(DoRecordWrongAnswer(qid, selectedOpt, correctOpt));
     }
 
@@ -433,46 +439,55 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         // 错题数
         string statText = totalWrong == 0
-            ? "本题全对！"
-            : $"本次共答错 {totalWrong} 次，以下是你可能需要加强的概念：";
+            ? "本次全对！太厉害了！"
+            : $"本次共答错 {totalWrong} 次，以下是可以继续加强的概念：";
         MakeTMP("Stat", panel.transform,
-            V2(0f, 0.72f), V2(1f, 0.80f), V2(20, 5), V2(-20, -5),
-            statText, 18, new Color(1f, 0.85f, 0.3f, 1f), TextAlignmentOptions.Center, false);
+            V2(0f, 0.71f), V2(1f, 0.80f), V2(20, 4), V2(-20, -4),
+            statText, 16, new Color(1f, 0.85f, 0.3f, 1f), TextAlignmentOptions.Center, false);
 
-        // 迷思概念列表区域（每行一个概念+错次+概念变清晰按钮）
-        float yStart = 0.70f;
-        float rowH = 0.09f;
+        // 概念分隔线
+        MakeImg("StatDiv", panel.transform,
+            V2(0.02f, 0.695f), V2(0.98f, 0.705f), V2(0, 0), V2(0, 0),
+            new Color(1f, 0.85f, 0.3f, 0.2f));
+
+        // 迷思概念列表区域（每行一个概念+错次+查看解析按钮）
+        float yStart = 0.685f;
+        float rowH = 0.08f;
         int row = 0;
 
         System.Action<string, string, int> AddMisconceptionRow = (string concept, string data, int wrongCount) => {
-            string misconception = "";
             string[] parts = data.Split(new string[] { "||" }, System.StringSplitOptions.None);
-            if (parts.Length >= 1) misconception = parts[0];
-            float y = yStart - row * (rowH + 0.01f);
+            // 每行占 rowH + 0.01f 间距
+            float rowTop = yStart - row * (rowH + 0.01f);
+            float rowBot = rowTop - rowH;
             var rowBg = new GameObject("Row_" + concept);
             rowBg.transform.SetParent(panel.transform, false);
             var rowRt = rowBg.AddComponent<RectTransform>();
-            rowRt.anchorMin = new Vector2(0.02f, 1f - (row + 1) * (rowH + 0.01f) / 0.7f);
-            rowRt.anchorMax = new Vector2(0.98f, 1f - row * (rowH + 0.01f) / 0.7f);
+            rowRt.anchorMin = new Vector2(0.02f, rowBot);
+            rowRt.anchorMax = new Vector2(0.98f, rowTop);
             rowRt.offsetMin = Vector2.zero;
             rowRt.offsetMax = Vector2.zero;
-            rowBg.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.04f);
+            rowBg.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.05f);
+            MakeBorder(rowBg, new Color(0.4f, 0.4f, 0.5f, 0.2f), 1f);
+            // 概念名（字号加大突出）
             MakeTMP("Concept", rowBg.transform,
-                V2(0.01f, 0.1f), V2(0.32f, 0.9f), V2(8, 2), V2(-3, -2),
-                concept, 14, CREAM, TextAlignmentOptions.Left, false);
+                V2(0.01f, 0.08f), V2(0.38f, 0.92f), V2(8, 2), V2(-4, -2),
+                concept, 18, CREAM, TextAlignmentOptions.MiddleLeft, true);
+            // 错误次数
             MakeTMP("Count", rowBg.transform,
-                V2(0.33f, 0.1f), V2(0.44f, 0.9f), V2(8, 2), V2(-3, -2),
-                "×" + wrongCount + "次", 13, new Color(1f, 0.5f, 0.5f, 1f), TextAlignmentOptions.Left, false);
-            MakeActionButton("概念变清晰", new Color(0.2f, 0.45f, 0.8f, 1f),
+                V2(0.39f, 0.08f), V2(0.55f, 0.92f), V2(4, 2), V2(-4, -2),
+                "✗ " + wrongCount + "次", 14, new Color(1f, 0.5f, 0.5f, 1f), TextAlignmentOptions.MiddleCenter, false);
+            // 查看解析按钮
+            MakeActionButton("查看解析", new Color(0.2f, 0.45f, 0.8f, 1f),
                 () => ShowMisconceptionDetail(concept, data),
-                V2(0.78f, 0.1f), V2(0.98f, 0.9f), rowBg.transform);
+                V2(0.76f, 0.1f), V2(0.99f, 0.9f), rowBg.transform);
             row++;
         };
 
         if (totalWrong == 0)
         {
             MakeTMP("AllClear", panel.transform,
-                V2(0f, 0.12f), V2(1f, 0.72f), V2(20, 5), V2(-20, -5),
+                V2(0f, 0.12f), V2(1f, 0.685f), V2(20, 5), V2(-20, -5),
                 "你对所有概念的理解都很清晰，继续保持！", 18, new Color(0.5f, 1f, 0.5f, 1f),
                 TextAlignmentOptions.Center, false);
         }
@@ -501,11 +516,23 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 for (int i = 0; i < 3; i++) {
                     if (starImages[i] != null) {
                         starImages[i].color = new Color(0.15f, 0.15f, 0.18f, 0.8f);
+                        // 移除EarnStar追加的金色边框子对象，重建灰色边框
+                        var toDestroy = new List<Transform>();
+                        foreach (Transform child in starImages[i].transform)
+                            if (child.name == "L") toDestroy.Add(child);
+                        foreach (var bd in toDestroy) Destroy(bd.gameObject);
+                        MakeBorder(starImages[i].gameObject, new Color(0.4f, 0.4f, 0.4f, 0.5f), 1f);
+                        // 重置标签文字和样式
                         var lbl = starImages[i].transform.Find("Lbl");
                         if (lbl != null) {
                             var t = lbl.GetComponent<TextMeshProUGUI>();
-                            if (t != null && t.text.StartsWith("★"))
-                                t.text = "☆" + t.text.Substring(1);
+                            if (t != null) {
+                                t.color = new Color(0.5f, 0.5f, 0.5f, 1f);
+                                t.fontSize = 14;
+                                t.fontStyle = FontStyles.Normal;
+                                if (t.text.StartsWith("★"))
+                                    t.text = "☆" + t.text.Substring(1);
+                            }
                         }
                     }
                 }
@@ -515,13 +542,27 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 currentIncidentAngle = 15f;
                 currentRefractAngle = 0f;
                 isTotalReflection = false;
+                // 重置所有阶段状态
                 stage = 1;
+                laserActivated = false;
+                laserOn = false;
+                stage2Triggered = false;
                 stage3Triggered = false;
+                stage4Triggered = false;
+                totalReflFound = false;
                 predictionMade = false;
                 verifyDone = false;
                 refractionRuleAnswered = false;
+                isShowingNextQuestion = false;
                 wrongAttempts = 0;
+                aiCurrentQuestion = "";
+                aiCurrentOptions = new string[0];
+                lastSelectedOption = "";
+                idleTimer = 0f;
+                hintLevel = -1;
+                lastAngle = 15f;
                 questionWrongCount.Clear();
+                questionAnswerHistory.Clear();
                 UpdateRayLines(15f);
                 HideAllRays();
                 sliderLocked = true;
@@ -759,7 +800,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
     }
 
-    void OnRefractionRuleAnswer(bool correct)
+    void OnRefractionRuleAnswer(bool correct, string selectedOpt = "折射角会变小")
     {
         ClearBubbles();
         if (correct)
@@ -772,37 +813,27 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            AudioManager.PlayWrong();
-            wrongAttempts++;
+            lastSelectedOption = selectedOpt;
+            RecordWrongAnswer("q_refraction_rule", selectedOpt, "折射角会变大");
             learningTracker?.OnAnswerRecorded("refraction_rule");
-            string wrongOpt = "折射角会变小"; // 迷思概念映射的key
-            RecordWrongAnswer("q_refraction_rule", wrongOpt, "折射角会变大");
             if (wrongAttempts >= 3)
             {
+                AudioManager.PlayWrong();
+                wrongAttempts++;
                 ShanShanSayLocal(GetLectureText("q_refraction_rule"), true);
                 wrongAttempts = 0;
                 StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
             }
             else
             {
-                ShanShanSayLocal(GetWrongHint("q_refraction_rule", wrongAttempts), true);
-                StartCoroutine(DelayDo(2.2f, () => {
-                    currentQuestionId = "q_refraction_rule";
-                    StartCoroutine(ShanShanAsk("再次引导玩家观察：入射角变大时，折射角怎么变？", () => {
-                        ShowChoiceBubble(
-                            new[]{ "折射角会变大", "折射角会变小", "折射角不变" },
-                            new System.Action[]{
-                                () => OnRefractionRuleAnswer(true),
-                                () => OnRefractionRuleAnswer(false),
-                                () => OnRefractionRuleAnswer(false)
-                            });
-                    }));
-                }));
+                currentQuestionId = "q_refraction_rule";
+                aiCurrentOptions = new[]{ "折射角会变大", "折射角会变小", "折射角不变" };
+                StartCoroutine(SendAnswerToAI());
             }
         }
     }
 
-    void OnCriticalAngleAnswer(bool correct)
+    void OnCriticalAngleAnswer(bool correct, string selectedOpt = "折射角")
     {
         ClearBubbles();
         if (correct)
@@ -814,32 +845,22 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            AudioManager.PlayWrong();
-            wrongAttempts++;
+            lastSelectedOption = selectedOpt;
+            RecordWrongAnswer("q_critical_angle", selectedOpt, "临界角");
             learningTracker?.OnAnswerRecorded("critical_angle");
-            RecordWrongAnswer("q_critical_angle", "折射角", "临界角");
             if (wrongAttempts >= 3)
             {
+                AudioManager.PlayWrong();
+                wrongAttempts++;
                 ShanShanSayLocal(GetLectureText("q_critical_angle"), true);
                 wrongAttempts = 0;
                 StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
             }
             else
             {
-                ShanShanSayLocal(GetWrongHint("q_critical_angle", wrongAttempts), true);
-                StartCoroutine(DelayDo(2.2f, () => {
-                    currentQuestionId = "q_critical_angle";
-                    StartCoroutine(ShanShanAsk("再次引导玩家：折射角等于90度时的那个入射角叫什么？", () => {
-                        ShowChoiceBubble(
-                            new[]{ "临界角", "折射角", "入射角", "反射角" },
-                            new System.Action[]{
-                                () => OnCriticalAngleAnswer(true),
-                                () => OnCriticalAngleAnswer(false),
-                                () => OnCriticalAngleAnswer(false),
-                                () => OnCriticalAngleAnswer(false)
-                            });
-                    }));
-                }));
+                currentQuestionId = "q_critical_angle";
+                aiCurrentOptions = new[]{ "临界角", "折射角", "入射角", "反射角" };
+                StartCoroutine(SendAnswerToAI());
             }
         }
     }
@@ -916,14 +937,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
             ShowChoiceBubble(
                 new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
                 new System.Action[]{
-                    () => OnTotalReflAnswer(false),
-                    () => OnTotalReflAnswer(true),
-                    () => OnTotalReflAnswer(false)
+                    () => OnTotalReflAnswer(false, "光消失了"),
+                    () => OnTotalReflAnswer(true,  "光全部反射回水中"),
+                    () => OnTotalReflAnswer(false, "光被水吸收了")
                 });
         }));
     }
 
-    void OnTotalReflAnswer(bool correct)
+    void OnTotalReflAnswer(bool correct, string selectedOpt = "光消失了")
     {
         ClearBubbles();
         if (correct)
@@ -936,33 +957,24 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            AudioManager.PlayWrong();
-            wrongAttempts++;
+            lastSelectedOption = selectedOpt;
+            RecordWrongAnswer("q_total_reflection", selectedOpt, "光全部反射回水中");
             learningTracker?.OnAnswerRecorded("total_reflection");
-            RecordWrongAnswer("q_total_reflection", "光被水吸收了", "光全部反射回水中");
             if (wrongAttempts >= 3)
             {
+                AudioManager.PlayWrong();
+                wrongAttempts++;
                 ShanShanSayLocal(GetLectureText("q_total_reflection"), true);
                 wrongAttempts = 0;
                 StartCoroutine(DelayDo(2.5f, ShowDiscoveryCard));
             }
             else
             {
-                ShanShanSayLocal(GetWrongHint("q_total_reflection", wrongAttempts), true);
-                StartCoroutine(DelayDo(2.2f, ShowTotalReflRetryBubble));
+                currentQuestionId = "q_total_reflection";
+                aiCurrentOptions = new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" };
+                StartCoroutine(SendAnswerToAI());
             }
         }
-    }
-
-    void ShowTotalReflRetryBubble()
-    {
-        ShowChoiceBubble(
-            new[]{ "光消失了", "光全部反射回水中", "光被水吸收了" },
-            new System.Action[]{
-                () => OnTotalReflAnswer(false),
-                () => OnTotalReflAnswer(true),
-                () => OnTotalReflAnswer(false)
-            });
     }
 
     // ══════════════════════════════════════════
@@ -1026,14 +1038,14 @@ public class Chapter3ExperimentManager : MonoBehaviour
                     "只要角度够大就会全反射"
                 },
                 new System.Action[]{
-                    () => OnVerify(true),
-                    () => OnVerify(false),
-                    () => OnVerify(false)
+                    () => OnVerify(true,  "光从水射向空气，入射角>=临界角"),
+                    () => OnVerify(false, "光从空气射向水，角度越大越好"),
+                    () => OnVerify(false, "只要角度够大就会全反射")
                 });
         }));
     }
 
-    void OnVerify(bool correct)
+    void OnVerify(bool correct, string selectedOpt = "只要角度够大就会全反射")
     {
         ClearBubbles();
         if (correct)
@@ -1048,22 +1060,27 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 ShowChoiceBubble(
                     new[]{ "大于临界角", "小于临界角" },
                     new System.Action[]{
-                        () => OnCoinAnswer(true),
-                        () => OnCoinAnswer(false)
+                        () => OnCoinAnswer(true,  "大于临界角"),
+                        () => OnCoinAnswer(false, "小于临界角")
                     });
             }));
         }
         else
         {
-            AudioManager.PlayWrong();
-            RecordWrongAnswer("q_verify", "只要角度够大就会全反射", "光从水射向空气，入射角>=临界角");
-            StartCoroutine(ShanShanAsk("玩家答错了全反射条件，引导他记住两个条件：光从水到空气且入射角>=临界角"));
+            lastSelectedOption = selectedOpt;
+            RecordWrongAnswer("q_verify", selectedOpt, "光从水射向空气，入射角>=临界角");
             learningTracker?.OnAnswerRecorded("verify_condition");
-            StartCoroutine(DelayDo(2f, ShowVerifyPanel));
+            currentQuestionId = "q_verify";
+            aiCurrentOptions = new[]{
+                "光从水射向空气，入射角>=临界角",
+                "光从空气射向水，角度越大越好",
+                "只要角度够大就会全反射"
+            };
+            StartCoroutine(SendAnswerToAI());
         }
     }
 
-    void OnCoinAnswer(bool correct)
+    void OnCoinAnswer(bool correct, string selectedOpt = "小于临界角")
     {
         ClearBubbles();
         if (correct)
@@ -1075,10 +1092,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            RecordWrongAnswer("q_coin", "小于临界角", "大于临界角");
+            lastSelectedOption = selectedOpt;
+            RecordWrongAnswer("q_coin", selectedOpt, "大于临界角");
             learningTracker?.OnAnswerRecorded("coin_angle");
-            // 答错了，给第二次选择机会
-            StartCoroutine(DelayDo(1.5f, ShowCoinRetryBubble));
+            currentQuestionId = "q_coin";
+            aiCurrentOptions = new[]{ "大于临界角", "小于临界角" };
+            StartCoroutine(SendAnswerToAI());
         }
     }
 
@@ -1396,14 +1415,27 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     IEnumerator SendAnswerToAI()
     {
-        // 等一下让玩家看清选中的效果
-        yield return new WaitForSeconds(0.3f);
+        // 立刻显示占位文字（确认玩家的选择，不让界面空着等待）
+        ShanShanSayLocal($"你选了「{lastSelectedOption}」……", false);
+
+        yield return new WaitForSeconds(0.2f);
+
+        // 构建答题序列字符串（如 "1条,2条"）
+        string seqStr = "";
+        if (questionAnswerHistory.ContainsKey(currentQuestionId) && questionAnswerHistory[currentQuestionId].Count > 0)
+            seqStr = string.Join(",", questionAnswerHistory[currentQuestionId]);
+
+        // 全局：这局共在几道题上出过错
+        int globalWrongTopics = 0;
+        foreach (var kv in questionWrongCount) if (kv.Value > 0) globalWrongTopics++;
 
         string body =
             "{\"session_id\":\"" + sessionId + "\"," +
             "\"question_id\":\"" + currentQuestionId + "\"," +
             "\"selected_option\":\"" + EscapeJson(lastSelectedOption) + "\"," +
             "\"wrong_count\":" + (wrongAttempts + 1) + "," +
+            "\"answer_sequence\":\"" + EscapeJson(seqStr) + "\"," +
+            "\"global_wrong_topics\":" + globalWrongTopics + "," +
             "\"exploration_stage\":" + stage + "," +
             "\"incident_angle\":" + currentIncidentAngle.ToString("F1") + "," +
             "\"is_total_reflection\":" + (isTotalReflection ? "true" : "false") + "," +
@@ -1414,6 +1446,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
         req.downloadHandler = new DownloadHandlerBuffer();
         req.SetRequestHeader("Content-Type", "application/json");
+        req.timeout = 6;  // 超时6秒，超时降级到本地预设
 
         yield return req.SendWebRequest();
 
@@ -1424,7 +1457,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            // 网络/服务器失败时本地兜底
+            // 网络/服务器失败或超时 → 降级到本地预设
             wrongAttempts++;
             AudioManager.PlayWrong();
             learningTracker?.OnAnswerRecorded("ai_wrong");
@@ -1515,6 +1548,31 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (nextAction == "advance" || (correct && string.IsNullOrEmpty(nextAction)))
         {
             AudioManager.PlayCorrect();
+            // q_verify 在 ShowAIOptionBubble 重试后答对：需要手动触发 EarnStar 和 q_coin 流程
+            if (currentQuestionId == "q_verify" && !verifyDone)
+            {
+                verifyDone = true;
+                EarnStar(2);
+                StartCoroutine(FlashScreen(new Color(0.2f, 1f, 0.3f, 0.3f)));
+                currentQuestionId = "q_coin";
+                isShowingNextQuestion = true;
+                StartCoroutine(ShanShanAsk("玩家终于答对了全反射条件，联系古币案件，问他从侧面看时入射角大还是小", () => {
+                    ShowChoiceBubble(
+                        new[]{ "大于临界角", "小于临界角" },
+                        new System.Action[]{
+                            () => OnCoinAnswer(true,  "大于临界角"),
+                            () => OnCoinAnswer(false, "小于临界角")
+                        });
+                }));
+                return;
+            }
+            // q_coin 在 ShowAIOptionBubble 重试后答对：显示正确反馈并弹出 go 按钮
+            if (currentQuestionId == "q_coin")
+            {
+                ShanShanSayLocal(GetCorrectFeedback("q_coin"), true);
+                StartCoroutine(DelayDo(1.5f, ShowGoButton));
+                return;
+            }
             if (currentQuestionId == "q_refraction_rule")
                 refractionRuleAnswered = true;
             // 如果 OnVerify/OnCoinAnswer 已经显示了下一题，跳过这里的反馈（避免覆盖新问题文字）
@@ -1542,20 +1600,20 @@ public class Chapter3ExperimentManager : MonoBehaviour
             return;
         }
 
-        // 苏格拉底追问 → MiniMax个性化追问 + 同一道题的选项（保持上下文）
+        // 苏格拉底追问 → MiniMax个性化引导反馈 + 题目原文回顾 + 选项
         if (nextAction == "socratic_retry")
         {
             AudioManager.PlayWrong();
             wrongAttempts++;
             learningTracker?.OnAnswerRecorded("ai_wrong");
-            // 立即显示 MiniMax 个性化追问（分层因 wrong_count 而不同）
+            // AI 个性化引导反馈
             ShanShanSayLocal(feedback, true);
-            // 1.5秒后显示原问题提醒气泡
+            // 2秒后只显示题目原文（帮玩家锚定"我在答什么"，不重复预设引导文本）
             if (!string.IsNullOrEmpty(question))
-                StartCoroutine(DelayDo(1.5f, () => ShanShanSayLocal("回顾：" + question, true)));
-            // 3秒后显示同一道题的选项
+                StartCoroutine(DelayDo(2f, () => ShanShanSayLocal(question, true)));
+            // 3.5秒后显示选项
             if (options != null && options.Length > 0)
-                StartCoroutine(DelayDo(3f, () => ShowAIOptionBubble(options)));
+                StartCoroutine(DelayDo(3.5f, () => ShowAIOptionBubble(options)));
             return;
         }
 
@@ -1633,7 +1691,18 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (opts.Length == 0) return;
         System.Action[] cbs = new System.Action[opts.Length];
-        for (int i = 0; i < cbs.Length; i++) cbs[i] = () => StartCoroutine(SendAnswerToAI());
+        for (int i = 0; i < opts.Length; i++)
+        {
+            string opt = opts[i];  // 捕获变量
+            cbs[i] = () => {
+                lastSelectedOption = opt;
+                // 记录此次选择到答题历史
+                if (!questionAnswerHistory.ContainsKey(currentQuestionId))
+                    questionAnswerHistory[currentQuestionId] = new List<string>();
+                questionAnswerHistory[currentQuestionId].Add(opt);
+                StartCoroutine(SendAnswerToAI());
+            };
+        }
         ShowChoiceBubble(opts, cbs);
     }
 
