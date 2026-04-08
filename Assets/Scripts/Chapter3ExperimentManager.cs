@@ -784,13 +784,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
             RecordWrongAnswer("q_line_count", selectedOpt, "3条");
             if (wrongAttempts >= 3)
             {
-                // 第3次直接讲解
+                // 第3次直接进入下一阶段
                 AudioManager.PlayWrong();
-                wrongAttempts++;
-                learningTracker?.OnAnswerRecorded("line_count");
-                ShanShanSayLocal(GetLectureText("q_line_count"), true);
                 wrongAttempts = 0;
-                StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
+                StartCoroutine(DelayDo(0.5f, ShowLectureContinueButton));
             }
             else
             {
@@ -819,10 +816,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
-                wrongAttempts++;
-                ShanShanSayLocal(GetLectureText("q_refraction_rule"), true);
                 wrongAttempts = 0;
-                StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
+                StartCoroutine(DelayDo(0.5f, ShowLectureContinueButton));
             }
             else
             {
@@ -851,10 +846,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
-                wrongAttempts++;
-                ShanShanSayLocal(GetLectureText("q_critical_angle"), true);
                 wrongAttempts = 0;
-                StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
+                StartCoroutine(DelayDo(0.5f, ShowLectureContinueButton));
             }
             else
             {
@@ -964,10 +957,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
-                // wrongAttempts已在SendAnswerToAI()里累加到3，此处直接用0重置
                 wrongAttempts = 0;
-                ShanShanSayLocal(GetLectureText("q_total_reflection"), true);
-                StartCoroutine(DelayDo(2.5f, ShowDiscoveryCard));
+                StartCoroutine(DelayDo(0.5f, ShowDiscoveryCard));
             }
             else
             {
@@ -1466,13 +1457,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         else
         {
             Debug.LogError($"[SendAnswerToAI] 请求失败: {req.error}");
-            // 网络/服务器失败或超时 → 降级到本地预设
-            wrongAttempts++;
+            // 网络/服务器失败或超时 → 继续显示选项，等待玩家重试
             AudioManager.PlayWrong();
-            learningTracker?.OnAnswerRecorded("ai_wrong");
-            ShanShanSayLocal(GetWrongHint(currentQuestionId, wrongAttempts), true);
             if (aiCurrentOptions.Length > 0)
-                StartCoroutine(DelayDo(2.2f, () => ShowAIOptionBubble(aiCurrentOptions)));
+                StartCoroutine(DelayDo(1f, () => ShowAIOptionBubble(aiCurrentOptions)));
         }
     }
 
@@ -1601,14 +1589,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
             return;
         }
 
-        // 第三次答错 → lecture（讲解+继续按钮）
+        // 第三次答错 → 直接进入下一阶段
         if (nextAction == "lecture")
         {
             AudioManager.PlayWrong();
-            wrongAttempts++;
-            learningTracker?.OnAnswerRecorded("ai_wrong");
-            ShanShanSayLocal(GetLectureText(currentQuestionId), true);
-            StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
+            wrongAttempts = 0;
+            StartCoroutine(DelayDo(0.5f, ShowLectureContinueButton));
             return;
         }
 
@@ -1629,13 +1615,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
             return;
         }
 
-        // 答错兜底（不应该到达，除非解析出错）→ 分层提示 + 重新显示相同选项
-        // 注意：wrongAttempts已在SendAnswerToAI()里+1，此处不重复
+        // 答错兜底（不应该到达，除非解析出错）→ 直接重新显示相同选项
         AudioManager.PlayWrong();
-        learningTracker?.OnAnswerRecorded("ai_wrong");
-        ShanShanSayLocal(GetWrongHint(currentQuestionId, wrongAttempts), true);
         if (aiCurrentOptions.Length > 0)
-            StartCoroutine(DelayDo(2.2f, () => ShowAIOptionBubble(aiCurrentOptions)));
+            StartCoroutine(DelayDo(1f, () => ShowAIOptionBubble(aiCurrentOptions)));
     }
 
     string GetCorrectFeedback(string questionId)
