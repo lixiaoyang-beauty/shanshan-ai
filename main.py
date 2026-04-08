@@ -398,6 +398,12 @@ class LearningTrajectory:
 
 SYSTEM_PROMPT = """你是"闪闪"，艾莉博士的AI助理，陪伴小学生柯南探索光学实验。
 
+【实验设定】（必须始终遵守）
+- 激光从水底往上射向空气（光从光密介质→光疏介质，水的折射率≈1.33）
+- 水面在上方，是水平面
+- 入射角：光从水射向空气时的角度
+- 全反射发生在：光从水射向空气且入射角>临界角（约48度）
+
 【故事背景】
 柯南在调查博物馆古币消失案件，向艾莉博士求助。艾莉博士给了柯南一副光路追踪眼镜和虚拟实验台，让他探索光的折射和全反射现象，揭开古币消失的秘密。
 
@@ -560,16 +566,21 @@ def chat(req: ChatRequest):
 
     # 情况3：玩家自由提问（AskBtn）→ MiniMax 生成回答
     if req.question and not qid:
-        free_question_prompt = f"""【玩家自由提问】
+        free_question_prompt = f"""【实验设定】（必须牢记，答题时不可违背）
+        - 激光从水底往上射向空气（光从光密介质→光疏介质）
+        - 水面在上方，是水平面
+        - 入射角：光从水射向空气时的角度
+
+        【玩家当前状态】
         探索阶段：{req.exploration_stage}
-        当前入射角：{req.incident_angle:.1f}度
+        入射角：{req.incident_angle:.1f}度
         折射角：{req.refract_angle:.1f}度
-        是否全反射：{'是' if req.is_total_reflection else '否'}
+        {'已发生全反射，折射光消失' if req.is_total_reflection else '尚未发生全反射'}
         玩家的问题是：{req.question}
 
-        你是"闪闪"，艾莉博士的AI助理，用轻松友好的语气回答玩家的问题。
+        你是"闪闪"，艾莉博士的AI助理，用轻松友好的语气回答。
         要求：1.不直接给答案 2.不超过3句话 3.必须以问句结尾 4.不用emoji 5.回复不超过45个汉字
-        如果玩家问的问题和当前实验现象有关，要引导他结合实验观察来思考。"""
+        注意：光是从水射向空气（不是空气进玻璃），答题时务必遵守这个设定。"""
 
         messages = [
             {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
@@ -683,7 +694,12 @@ def receive_learning_data(req: LearningDataRequest):
     else:
         tone_hint = "语气稍微直接一点，但仍然用问句，可以稍微给点方向提示"
 
-    analysis_content = f"""【玩家答题情况】
+    analysis_content = f"""【实验设定】（必须牢记，答题时不可违背）
+- 激光从水底往上射向空气（光从光密介质→光疏介质）
+- 水面在上方，是水平面
+- 入射角：光从水射向空气时的角度
+
+【玩家答题情况】
 探索阶段：{req.exploration_stage}
 当前入射角：{req.current_angle:.1f}度
 本题错了几次：{req.wrong_count}次
@@ -692,7 +708,8 @@ def receive_learning_data(req: LearningDataRequest):
 玩家的迷思概念：{misconception_text}
 追问角度提示：{socratic_angle}
 
-{tone_hint}，不超过20字，生成一句苏格拉底式追问。"""
+{tone_hint}，不超过20字，生成一句苏格拉底式追问。
+注意：光是从水射向空气（不是空气进玻璃），答题时务必遵守这个设定。"""
 
     messages = [
         {"role": "system", "name": "闪闪", "content": SYSTEM_PROMPT},
