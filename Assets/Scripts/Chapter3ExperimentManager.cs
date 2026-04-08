@@ -738,27 +738,23 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
         else
         {
-            AudioManager.PlayWrong();
-            wrongAttempts++;
-            learningTracker?.OnAnswerRecorded("line_count");
             string selectedOpt = count == 1 ? "1条" : (count == 2 ? "2条" : "3条");
+            lastSelectedOption = selectedOpt;
             RecordWrongAnswer("q_line_count", selectedOpt, "3条");
             if (wrongAttempts >= 3)
             {
+                // 第3次直接讲解
+                AudioManager.PlayWrong();
+                wrongAttempts++;
+                learningTracker?.OnAnswerRecorded("line_count");
                 ShanShanSayLocal(GetLectureText("q_line_count"), true);
                 wrongAttempts = 0;
                 StartCoroutine(DelayDo(2f, ShowLectureContinueButton));
             }
             else
             {
-                ShanShanSayLocal(GetWrongHint("q_line_count", wrongAttempts), true);
-                StartCoroutine(DelayDo(2.2f, () => ShowChoiceBubble(
-                    new[]{ "1条", "2条", "3条" },
-                    new System.Action[]{
-                        () => OnLineCountAnswer(1),
-                        () => OnLineCountAnswer(2),
-                        () => OnLineCountAnswer(3)
-                    })));
+                // 交给 SendAnswerToAI 处理：AI个性化引导反馈 + 选项重现
+                StartCoroutine(SendAnswerToAI());
             }
         }
     }
@@ -1333,7 +1329,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
             "\"is_total_reflection\":" + (isTotalReflection ? "true" : "false") + "," +
             "\"refract_angle\":" + currentRefractAngle.ToString("F1") + "," +
             "\"exploration_stage\":" + stage + "," +
-            "\"selected_option\":null}";
+            "\"selected_option\":\"\"}";
 
         using var req = new UnityWebRequest(shanShanServerUrl + "/chat", "POST");
         req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -1425,6 +1421,16 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             string json = req.downloadHandler.text;
             ProcessAIAnswerResponse(json);
+        }
+        else
+        {
+            // 网络/服务器失败时本地兜底
+            wrongAttempts++;
+            AudioManager.PlayWrong();
+            learningTracker?.OnAnswerRecorded("ai_wrong");
+            ShanShanSayLocal(GetWrongHint(currentQuestionId, wrongAttempts), true);
+            if (aiCurrentOptions.Length > 0)
+                StartCoroutine(DelayDo(2.2f, () => ShowAIOptionBubble(aiCurrentOptions)));
         }
     }
 

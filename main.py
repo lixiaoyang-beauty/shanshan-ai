@@ -270,7 +270,13 @@ def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
         response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
         print(f"[MiniMax] 响应状态码: {response.status_code}")
         if response.status_code == 200:
-            data = response.json()
+            try:
+                data = response.json()
+            except Exception:
+                # MiniMax 有时返回 extra data（多段 JSON），取第一段
+                import json as _json
+                decoder = _json.JSONDecoder()
+                data, _ = decoder.raw_decode(response.text.strip())
             choices = data.get("choices", [])
             if choices:
                 msg = choices[0].get("message", {})
@@ -436,7 +442,9 @@ def chat(req: ChatRequest):
         if ai_message and ai_message.strip():
             try:
                 import json
-                data = json.loads(ai_message)
+                # raw_decode 只解析第一个 JSON 对象，忽略 extra data
+                decoder = json.JSONDecoder()
+                data, _ = decoder.raw_decode(ai_message.strip())
                 guided_feedback = data.get("guided", "")[:50]
             except:
                 guided_feedback = ai_message.strip()[:50]
