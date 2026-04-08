@@ -950,6 +950,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (correct)
         {
             wrongAttempts = 0;
+            currentQuestionId = "q_total_reflection";
             AudioManager.PlayCorrect();
             ShanShanSayLocal(GetCorrectFeedback("q_total_reflection"), true);
             UnlockSlider();
@@ -963,9 +964,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
-                wrongAttempts++;
-                ShanShanSayLocal(GetLectureText("q_total_reflection"), true);
+                // wrongAttempts已在SendAnswerToAI()里累加到3，此处直接用0重置
                 wrongAttempts = 0;
+                ShanShanSayLocal(GetLectureText("q_total_reflection"), true);
                 StartCoroutine(DelayDo(2.5f, ShowDiscoveryCard));
             }
             else
@@ -1056,13 +1057,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
             StartCoroutine(FlashScreen(new Color(0.2f,1f,0.3f,0.3f)));
             currentQuestionId = "q_coin";
             isShowingNextQuestion = true;
-            StartCoroutine(ShanShanAsk("玩家答对了全反射条件，联系古币案件，问他从侧面看时入射角大还是小", () => {
-                ShowChoiceBubble(
-                    new[]{ "大于临界角", "小于临界角" },
-                    new System.Action[]{
-                        () => OnCoinAnswer(true,  "大于临界角"),
-                        () => OnCoinAnswer(false, "小于临界角")
-                    });
+            // 先显示答对反馈，再显示下一题
+            ShanShanSayLocal(GetCorrectFeedback("q_verify"), true);
+            StartCoroutine(DelayDo(1.5f, () => {
+                StartCoroutine(ShanShanAsk("玩家答对了全反射条件，联系古币案件，问他从侧面看时入射角大还是小", () => {
+                    ShowChoiceBubble(
+                        new[]{ "大于临界角", "小于临界角" },
+                        new System.Action[]{
+                            () => OnCoinAnswer(true,  "大于临界角"),
+                            () => OnCoinAnswer(false, "小于临界角")
+                        });
+                }));
             }));
         }
         else
@@ -1229,9 +1234,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
             System.Action cb = callbacks[idx];
             btn.onClick.AddListener(() => {
                 lastSelectedOption = capturedOption;
-                ClearBubbles();
+                ClearBubbles();  // 重置 waitingForChoice=false，解锁 ShanShanSayLocal 显示
                 cb?.Invoke();
                 AudioManager.PlayClick();
+                waitingForChoice = false;  // 确保按钮回调后 waitingForChoice 为 false
             });
 
             MakeTMP("T",go.transform,V2(0,0),V2(1,1),V2(4,4),V2(-4,-4),
