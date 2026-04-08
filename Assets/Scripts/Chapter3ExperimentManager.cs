@@ -1173,13 +1173,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         switch (qid)
         {
-            case "q_line_count":       return "哇！你能看到几条光线？";
-            case "q_refraction_rule":  return "入射角变大时，折射角怎么变？";
-            case "q_critical_angle":   return "折射角=90度时的入射角叫什么？";
-            case "q_prediction":      return "继续增大角度，折射光会怎样？";
-            case "q_total_reflection": return "哇！折射光消失了！光去哪了？";
-            case "q_verify":           return "发生全反射需要哪两个条件？";
-            case "q_coin":            return "从侧面观察古币时，入射角是大还是小？";
+            case "q_line_count":       return "哇！你看到光线了！咦，光好像不只是一条路线呢！你仔细看看，能观察到几条光线呀？";
+            case "q_refraction_rule":  return "咦，你发现了吗？角度小的时候和角度大的时候，折射光偏折的程度好像不太一样……入射角变大时，折射角会怎么变呢？";
+            case "q_critical_angle":   return "哇，折射光越来越暗了，都快要消失了一样！好神奇～当折射角刚好等于90度（贴着水面走）时，这时的入射角有特别的名字，叫什么呢？";
+            case "q_prediction":      return "哇，折射光是不是越来越暗了～好有意思！如果继续增大角度，你觉得折射光会怎么样呢？";
+            case "q_total_reflection": return "哇！折射光完全消失了！等等……光真的不见了吗？你仔细看看反射光那边——咦，是不是反而变亮了？光到底去了哪里呀？";
+            case "q_verify":           return "太厉害了！发现了全反射现象！咦，不过要发生全反射可没那么简单哦～一起说说是哪两个条件？";
+            case "q_coin":            return "叮叮！恭喜你发现了古币消失的秘密！从侧面看古币时，入射角是大还是小呢？会不会发生全反射呀？";
             default:                   return "仔细观察实验台，选择正确答案！";
         }
     }
@@ -1575,21 +1575,36 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             string json = req.downloadHandler.text;
-            // 新格式：从 question 字段获取回复
+            string replyText = "";
+
+            // 优先尝试 question 字段（预设/标准格式）
             int idx = json.IndexOf("\"question\":\"");
             if (idx >= 0)
             {
                 int s = idx + 12;
                 int e = json.IndexOf("\"", s);
-                if (e > s)
+                if (e > s) replyText = json.Substring(s, e - s);
+            }
+
+            // 如果 question 字段没有，尝试 MiniMax 的 content 字段（自由提问时）
+            if (string.IsNullOrEmpty(replyText))
+            {
+                int cIdx = json.IndexOf("\"content\":\"");
+                if (cIdx >= 0)
                 {
-                    string replyText = json.Substring(s, e - s);
-                    ShanShanSayLocal(replyText, true);
-                    float delay = Mathf.Max(1f, replyText.Length * 0.04f + 0.5f);
-                    yield return new WaitForSeconds(delay);
-                    onReplyDone?.Invoke();
-                    yield break;
+                    int s = cIdx + 12;
+                    int e = json.IndexOf("\"", s);
+                    if (e > s) replyText = json.Substring(s, e - s);
                 }
+            }
+
+            if (!string.IsNullOrEmpty(replyText))
+            {
+                ShanShanSayLocal(replyText, true);
+                float delay = Mathf.Max(1f, replyText.Length * 0.04f + 0.5f);
+                yield return new WaitForSeconds(delay);
+                onReplyDone?.Invoke();
+                yield break;
             }
         }
         else
