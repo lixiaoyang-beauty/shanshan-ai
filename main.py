@@ -310,7 +310,7 @@ PRESET_ANSWERS = {
 
 
 # ========== MiniMax AI 调用 ==========
-def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
+def call_minimax(messages: List[Dict], max_tokens: int = 600) -> Optional[str]:
     print(f"[MiniMax] 调用开始，API_KEY存在={bool(MINIMAX_API_KEY)}")
     if not MINIMAX_API_KEY:
         print("[MiniMax] API_KEY为空，跳过")
@@ -339,14 +339,14 @@ def call_minimax(messages: List[Dict], max_tokens: int = 500) -> Optional[str]:
             print(f"[MiniMax] 原始响应: {data}")  # 调试：看实际返回结构
             choices = data.get("choices", [])
             if choices:
-                msg = choices[0].get("message", {})
-                # MiniMax 可能用不同字段名，尝试多种路径
-                content = (
-                    msg.get("content") or
-                    msg.get("text") or
-                    (msg.get("content", [{}])[0].get("text") if isinstance(msg.get("content"), list) else None)
-                )
-                print(f"[MiniMax] 解析后content: '{content}'")  # 调试
+                first_choice = choices[0]
+                # finish_reason=length 表示被截断，content为空，返回None让C#走兜底
+                if first_choice.get("finish_reason") == "length":
+                    print("[MiniMax] truncated, returning None")
+                    return None
+                msg = first_choice.get("message", {})
+                content = msg.get("content") or msg.get("text") or ""
+                print(f"[MiniMax] content: '{str(content)[:80]}'")
                 if content and str(content).strip():
                     return str(content).strip()
         else:
@@ -518,7 +518,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "闪闪", "content": analysis_content}
         ]
 
-        ai_message = call_minimax(messages, max_tokens=250)
+        ai_message = call_minimax(messages, max_tokens=600)
 
         guided_feedback = ""
         if ai_message and ai_message.strip():
@@ -565,7 +565,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "柯南", "content": free_question_prompt}
         ]
 
-        raw = call_minimax(messages, max_tokens=200)
+        raw = call_minimax(messages, max_tokens=300)
 
         reply = ""
         if raw and raw.strip():
@@ -688,7 +688,7 @@ def receive_learning_data(req: LearningDataRequest):
         {"role": "user", "name": "闪闪", "content": analysis_content}
     ]
 
-    ai_message = call_minimax(messages, max_tokens=100)
+    ai_message = call_minimax(messages, max_tokens=300)
 
     socratic = ""
     if ai_message and ai_message.strip():
@@ -752,7 +752,7 @@ def hint(req: HintRequest):
         {"role": "user", "name": "柯南", "content": req.hint_context}
     ]
 
-    raw = call_minimax(messages, max_tokens=80)
+    raw = call_minimax(messages, max_tokens=200)
 
     if raw and raw.strip():
         text = raw.strip()[:30]
