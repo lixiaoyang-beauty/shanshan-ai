@@ -808,7 +808,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             lastSelectedOption = selectedOpt;
             RecordWrongAnswer("q_refraction_rule", selectedOpt, "折射角会变大");
-            learningTracker?.OnAnswerRecorded("refraction_rule");
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
@@ -838,7 +837,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             lastSelectedOption = selectedOpt;
             RecordWrongAnswer("q_critical_angle", selectedOpt, "临界角");
-            learningTracker?.OnAnswerRecorded("critical_angle");
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
@@ -949,7 +947,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             lastSelectedOption = selectedOpt;
             RecordWrongAnswer("q_total_reflection", selectedOpt, "光全部反射回水中");
-            learningTracker?.OnAnswerRecorded("total_reflection");
             if (wrongAttempts >= 3)
             {
                 AudioManager.PlayWrong();
@@ -1061,7 +1058,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             lastSelectedOption = selectedOpt;
             RecordWrongAnswer("q_verify", selectedOpt, "光从水射向空气，入射角>=临界角");
-            learningTracker?.OnAnswerRecorded("verify_condition");
             currentQuestionId = "q_verify";
             aiCurrentOptions = new[]{
                 "光从水射向空气，入射角>=临界角",
@@ -1086,7 +1082,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         {
             lastSelectedOption = selectedOpt;
             RecordWrongAnswer("q_coin", selectedOpt, "大于临界角");
-            learningTracker?.OnAnswerRecorded("coin_angle");
             currentQuestionId = "q_coin";
             aiCurrentOptions = new[]{ "大于临界角", "小于临界角" };
             StartCoroutine(SendAnswerToAI());
@@ -1713,9 +1708,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         rt.anchorMin = new Vector2(0.02f, 0.145f);
         rt.anchorMax = new Vector2(0.75f, 0.225f);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
-        go.AddComponent<Image>().color = new Color(0.04f, 0.08f, 0.21f, 0.88f);
-        MakeBorder(go, CYAN, 1.5f);
-        MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(10,4), V2(-10,-4),
+        MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(0,0), V2(0,0),
             text, 13, CREAM, TextAlignmentOptions.MidlineLeft, false);
         extraButtons.Add(go);
     }
@@ -1726,6 +1719,20 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (shanShanText != null) { shanShanText.text = msg; ApplyFont(shanShanText); }
         Show(shanShanPanel);
         StartCoroutine(AiMessageDoneDelay(msg.Length * 0.04f + 0.5f, onDone));
+    }
+
+    void MakeChevronStroke(Transform parent, Color color, Vector2 pos, float angle)
+    {
+        var go = new GameObject("Stroke");
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0f, 0.5f);
+        rt.sizeDelta = new Vector2(8f, 2f);
+        rt.anchoredPosition = pos;
+        rt.localRotation = Quaternion.Euler(0f, 0f, angle);
+        var img = go.AddComponent<Image>();
+        img.color = color; img.raycastTarget = false;
     }
 
     // 外部查询：当前是否在等待玩家选择选项
@@ -1977,22 +1984,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
         var img = go.AddComponent<Image>();
         img.color = color; img.raycastTarget = false;
 
-        // 方向箭头（▶ 放在线段60%处，入射光反向）
+        // 方向箭头：用两条 Image 线段组成 ">" 形，不依赖字体
         var arrowGo = new GameObject("Arrow");
         arrowGo.transform.SetParent(go.transform, false);
         var aRt = arrowGo.AddComponent<RectTransform>();
         aRt.anchorMin = aRt.anchorMax = Vector2.zero;
         aRt.pivot = new Vector2(0.5f, 0.5f);
-        aRt.sizeDelta = new Vector2(14f, 14f);
+        aRt.sizeDelta = Vector2.zero;
         aRt.anchoredPosition = new Vector2(72f, 0);  // 60% of 120
         if (pointToPivot) aRt.localRotation = Quaternion.Euler(0, 0, 180f);
-        var aTmp = arrowGo.AddComponent<TextMeshProUGUI>();
-        // 不调用 ApplyFont：中文字体缺少 ▶ 字形，保留默认字体
-        aTmp.text = "▶";
-        aTmp.fontSize = 11;
-        aTmp.color = Color.white;
-        aTmp.alignment = TextAlignmentOptions.Center;
-        aTmp.raycastTarget = false;
+        MakeChevronStroke(arrowGo.transform, color, new Vector2(-2f,  3.5f), -45f);
+        MakeChevronStroke(arrowGo.transform, color, new Vector2(-2f, -3.5f),  45f);
 
         return img;
     }
