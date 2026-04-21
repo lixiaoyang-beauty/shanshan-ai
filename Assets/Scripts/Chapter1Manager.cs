@@ -130,6 +130,14 @@ public class Chapter1Manager : MonoBehaviour
         AudioManager.AddClickSound(nextChapterBtn);
         AudioManager.AddClickSound(acceptMissionBtn);
 
+        // 禁用MouseLook组件，Chapter1只允许左右旋转视角
+        if (mainCamera != null)
+        {
+            var ml = mainCamera.GetComponent<MouseLook>();
+            if (ml == null) ml = mainCamera.GetComponentInParent<MouseLook>();
+            if (ml != null) ml.enabled = false;
+        }
+
         // 先显示委托面板，暂不锁定鼠标
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
@@ -207,18 +215,20 @@ public class Chapter1Manager : MonoBehaviour
         Vector3 dir = mainCamera.transform.right * h + mainCamera.transform.forward * v;
         dir.y = 0;
         if (dir.magnitude > 0.01f)
-            mainCamera.transform.position += dir.normalized * moveSpeed * Time.deltaTime;
+        {
+            Vector3 newPos = mainCamera.transform.position + dir.normalized * moveSpeed * Time.deltaTime;
+            if (!Physics.Raycast(mainCamera.transform.position, dir.normalized, 0.5f))
+                mainCamera.transform.position = newPos;
+        }
     }
 
     void HandleMouseLook()
     {
         if (mainCamera == null || Cursor.lockState != CursorLockMode.Locked) return;
         float mx = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float my = Input.GetAxis("Mouse Y") * mouseSensitivity;
-        cameraPitch = Mathf.Clamp(cameraPitch - my, -60f, 60f);
         mainCamera.transform.Rotate(Vector3.up, mx, Space.World);
         Vector3 e = mainCamera.transform.localEulerAngles;
-        mainCamera.transform.localEulerAngles = new Vector3(cameraPitch, e.y, 0);
+        mainCamera.transform.localEulerAngles = new Vector3(0, e.y, 0);
     }
 
     // ══════════════════════════════════════════

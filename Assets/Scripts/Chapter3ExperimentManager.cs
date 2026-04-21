@@ -309,7 +309,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         // 记录答错序列（用于个性化引导）
         if (!questionAnswerHistory.ContainsKey(qid)) questionAnswerHistory[qid] = new List<string>();
         questionAnswerHistory[qid].Add(selectedOpt);
-        StartCoroutine(DoRecordWrongAnswer(qid, selectedOpt, correctOpt));
+        // DoRecordWrongAnswer 已废弃（冗余请求），数据上报由 LearningTracker 统一处理
     }
 
     IEnumerator DoRecordWrongAnswer(string qid, string selectedOpt, string correctOpt)
@@ -350,12 +350,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
             }
         }
 
-        // 等主预设反馈显示完（2.5秒）后，叠加苏格拉底追问
-        yield return new WaitForSeconds(2.5f);
-        string display = !string.IsNullOrEmpty(socraticQuestion)
-            ? "💡 " + socraticQuestion
-            : "💡 " + GetSocraticFallback(qid);
-        ShanShanSayLocal(display, true);
+        // /learning-data 仅用于数据记录，反馈文字由 SendAnswerToAI → ProcessAIAnswerResponse 统一显示
+        yield return null;
     }
 
     // 苏格拉底追问后备库（MiniMax不可用时使用）
@@ -1295,8 +1291,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         ShanShanSayLocal("让我想想……", true);
         yield return CallShanShanApi(q, stage);
-        // 如果API失败，CallShanShanApi 会显示"暂时连不上"
-        // 不再做任何额外处理，提示已由 CallShanShanApi 显示
+        // AI回答完自由问题后，引导玩家继续探索
+        yield return new WaitForSeconds(2.5f);
+        if (!waitingForChoice && !isInDialogue)
+            ShanShanSayLocal("还有别的问题吗？我们继续刚才的探索吧！", true);
     }
 
     void ShanShanSayLocal(string msg, bool forceShow = false)
@@ -1602,8 +1600,6 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (nextAction == "socratic_retry")
         {
             AudioManager.PlayWrong();
-            // wrongAttempts已在SendAnswerToAI()里+1，此处不重复累加
-            learningTracker?.OnAnswerRecorded("ai_wrong");
             // AI 个性化引导反馈
             ShanShanSayLocal(feedback, true);
             // 2秒后只显示题目原文（帮玩家锚定"我在答什么"，不重复预设引导文本）

@@ -587,7 +587,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "柯南", "content": free_question_prompt}
         ]
 
-        raw = call_minimax(messages, max_tokens=300)
+        raw = call_minimax(messages, max_tokens=800)
 
         reply = ""
         if raw and raw.strip():
@@ -598,7 +598,7 @@ def chat(req: ChatRequest):
             except:
                 reply = raw.strip()
         else:
-            reply = "让我想想......嗯，我也有点不确定，我们一起继续观察吧！"
+            reply = "网络有点慢，稍后再试！你可以先继续实验，看看还有什么发现！"
 
         return ChatResponse(
             correct=False,
