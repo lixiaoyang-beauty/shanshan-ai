@@ -592,18 +592,43 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void DownloadLearningReport()
     {
-        try
+        StartCoroutine(DownloadReportCoroutine());
+    }
+
+    IEnumerator DownloadReportCoroutine()
+    {
+        string content = GenerateReportText();
+        string defaultName = "光学实验学习报告_" + System.DateTime.Now.ToString("yyyyMMdd_HHmm") + ".txt";
+        string savedPath = null;
+        bool done = false;
+
+        var thread = new System.Threading.Thread(() =>
         {
-            string content = GenerateReportText();
-            string desktop = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
-            string filename = "光学实验学习报告_" + System.DateTime.Now.ToString("yyyyMMdd_HHmm") + ".txt";
-            string path = System.IO.Path.Combine(desktop, filename);
-            System.IO.File.WriteAllText(path, content, System.Text.Encoding.UTF8);
-            ShowToast("报告已保存到桌面：" + filename);
-        }
-        catch (System.Exception e)
+            var dialog = new System.Windows.Forms.SaveFileDialog();
+            dialog.Title = "保存学习报告";
+            dialog.Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*";
+            dialog.FileName = defaultName;
+            dialog.InitialDirectory = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                savedPath = dialog.FileName;
+            done = true;
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+
+        while (!done) yield return null;
+
+        if (!string.IsNullOrEmpty(savedPath))
         {
-            ShowToast("保存失败：" + e.Message);
+            try
+            {
+                System.IO.File.WriteAllText(savedPath, content, System.Text.Encoding.UTF8);
+                ShowToast("报告已保存！");
+            }
+            catch (System.Exception e)
+            {
+                ShowToast("保存失败：" + e.Message);
+            }
         }
     }
 
