@@ -18,7 +18,7 @@ app.add_middleware(
 # MiniMax API 配置
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_API_URL = "https://api.minimaxi.com/v1/text/chatcompletion_v2"
-MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
+MINIMAX_MODEL = "M2-her"
 
 # 学习轨迹存储
 learning_sessions: Dict[str, "LearningTrajectory"] = {}
@@ -527,7 +527,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "闪闪", "content": analysis_content}
         ]
 
-        ai_message = call_minimax(messages, max_tokens=1200)
+        ai_message = call_minimax(messages, max_tokens=500)
 
         guided_feedback = ""
         if ai_message and ai_message.strip():
