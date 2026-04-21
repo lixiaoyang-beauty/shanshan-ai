@@ -766,7 +766,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         var cTmp = MakeTMP("Body", card.transform,
             V2(0f,0.10f), V2(1f,0.88f), V2(28,6), V2(-28,-4),
-            body, 13, Color.white, TextAlignmentOptions.TopLeft, false);
+            body, 24, Color.white, TextAlignmentOptions.Center, false);
         cTmp.lineSpacing = 4f;
 
         // 确认按钮
