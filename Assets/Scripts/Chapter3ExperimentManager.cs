@@ -595,6 +595,38 @@ public class Chapter3ExperimentManager : MonoBehaviour
         StartCoroutine(DownloadReportCoroutine());
     }
 
+    // Win32 P/Invoke — 不需要 System.Windows.Forms
+    [System.Runtime.InteropServices.DllImport("comdlg32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "GetSaveFileNameW")]
+    static extern bool GetSaveFileNameW(ref NativeOFN ofn);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    struct NativeOFN
+    {
+        public int    lStructSize;
+        public System.IntPtr hwndOwner;
+        public System.IntPtr hInstance;
+        public string lpstrFilter;
+        public string lpstrCustomFilter;
+        public int    nMaxCustFilter;
+        public int    nFilterIndex;
+        public System.IntPtr lpstrFile;
+        public int    nMaxFile;
+        public System.IntPtr lpstrFileTitle;
+        public int    nMaxFileTitle;
+        public string lpstrInitialDir;
+        public string lpstrTitle;
+        public int    Flags;
+        public short  nFileOffset;
+        public short  nFileExtension;
+        public string lpstrDefExt;
+        public System.IntPtr lCustData;
+        public System.IntPtr lpfnHook;
+        public string lpTemplateName;
+        public System.IntPtr pvReserved;
+        public int    dwReserved;
+        public int    FlagsEx;
+    }
+
     IEnumerator DownloadReportCoroutine()
     {
         string content = GenerateReportText();
@@ -604,13 +636,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
         var thread = new System.Threading.Thread(() =>
         {
-            var dialog = new System.Windows.Forms.SaveFileDialog();
-            dialog.Title = "保存学习报告";
-            dialog.Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*";
-            dialog.FileName = defaultName;
-            dialog.InitialDirectory = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                savedPath = dialog.FileName;
+            savedPath = Win32SaveDialog(defaultName);
             done = true;
         });
         thread.SetApartmentState(System.Threading.ApartmentState.STA);
@@ -629,6 +655,39 @@ public class Chapter3ExperimentManager : MonoBehaviour
             {
                 ShowToast("保存失败：" + e.Message);
             }
+        }
+    }
+
+    string Win32SaveDialog(string defaultName)
+    {
+        const int MAX_PATH = 260;
+        var fileBuffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(MAX_PATH * 2);
+        try
+        {
+            // 清零缓冲区
+            for (int i = 0; i < MAX_PATH * 2; i++)
+                System.Runtime.InteropServices.Marshal.WriteByte(fileBuffer, i, 0);
+            // 写入默认文件名
+            byte[] nameBytes = System.Text.Encoding.Unicode.GetBytes(defaultName);
+            int copyLen = System.Math.Min(nameBytes.Length, (MAX_PATH - 1) * 2);
+            System.Runtime.InteropServices.Marshal.Copy(nameBytes, 0, fileBuffer, copyLen);
+
+            var ofn = new NativeOFN();
+            ofn.lStructSize   = System.Runtime.InteropServices.Marshal.SizeOf(ofn);
+            ofn.lpstrFile     = fileBuffer;
+            ofn.nMaxFile      = MAX_PATH;
+            ofn.lpstrInitialDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+            ofn.lpstrTitle    = "保存学习报告";
+            ofn.lpstrDefExt   = "txt";
+            ofn.Flags         = 0x00000002 | 0x00000800; // OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR
+
+            if (GetSaveFileNameW(ref ofn))
+                return System.Runtime.InteropServices.Marshal.PtrToStringUni(fileBuffer);
+            return null;
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(fileBuffer);
         }
     }
 
