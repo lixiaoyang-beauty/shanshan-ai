@@ -1714,8 +1714,8 @@ public class Chapter3ExperimentManager : MonoBehaviour
         var go = new GameObject("RetryHint");
         go.transform.SetParent(canvas.transform, false);
         var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.12f, 0.12f);
-        rt.anchorMax = new Vector2(0.86f, 0.26f);
+        rt.anchorMin = new Vector2(0.05f, 0.11f);
+        rt.anchorMax = new Vector2(0.95f, 0.28f);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
         var hTmp = MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(8,4), V2(-8,-4),
             text, 17, Color.white, TextAlignmentOptions.Center, true);
