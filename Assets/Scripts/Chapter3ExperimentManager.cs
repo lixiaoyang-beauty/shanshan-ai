@@ -1695,12 +1695,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 StartCoroutine(SendAnswerToAI());
             };
         }
-        // 在气泡上方显示"再试一次吧：[题目]"
         string retryQ = !string.IsNullOrEmpty(aiCurrentQuestion)
             ? aiCurrentQuestion
             : GetPresetQuestionFallback(currentQuestionId);
-        ShowRetryHint("再试一次吧：" + retryQ);
         ShowChoiceBubble(opts, cbs);
+        // ShowChoiceBubble 内部调用 ClearBubbles，所以 ShowRetryHint 必须在它之后
+        ShowRetryHint("再试一次吧：" + retryQ);
     }
 
     void ShowRetryHint(string text)
@@ -1987,7 +1987,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         aRt.anchoredPosition = new Vector2(72f, 0);  // 60% of 120
         if (pointToPivot) aRt.localRotation = Quaternion.Euler(0, 0, 180f);
         var aTmp = arrowGo.AddComponent<TextMeshProUGUI>();
-        ApplyFont(aTmp);
+        // 不调用 ApplyFont：中文字体缺少 ▶ 字形，保留默认字体
         aTmp.text = "▶";
         aTmp.fontSize = 11;
         aTmp.color = Color.white;
