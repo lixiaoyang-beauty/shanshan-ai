@@ -323,7 +323,8 @@ def call_minimax(messages: List[Dict], max_tokens: int = 600) -> Optional[str]:
         "model": MINIMAX_MODEL,
         "messages": messages,
         "max_completion_tokens": max_tokens,
-        "temperature": 0.8
+        "temperature": 0.8,
+        "thinking_type": "disabled"
     }
     try:
         response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
@@ -604,7 +605,7 @@ def chat(req: ChatRequest):
             correct=False,
             feedback="",
             next_action="free_answer",
-            question=reply[:50] if len(reply) > 50 else reply,
+            question=reply[:120] if len(reply) > 120 else reply,
             options=[]
         )
 

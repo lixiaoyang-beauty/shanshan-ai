@@ -1293,7 +1293,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
         yield return CallShanShanApi(q, stage);
         // AI回答完自由问题后，引导玩家继续探索
         yield return new WaitForSeconds(2.5f);
-        if (!waitingForChoice && !isInDialogue)
+        if (waitingForChoice)
+            ShanShanSayLocal("还有别的问题吗？我们赶快来选择你心中的答案吧！", true);
+        else if (!isInDialogue)
             ShanShanSayLocal("还有别的问题吗？我们继续刚才的探索吧！", true);
     }
 
@@ -1411,7 +1413,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     IEnumerator SendAnswerToAI()
     {
         // 立刻显示占位文字（确认玩家的选择，不让界面空着等待）
-        ShanShanSayLocal($"你选了「{lastSelectedOption}」……", false);
+        ShanShanSayLocal($"你选了「{lastSelectedOption}」……我正在思考中……", false);
 
         yield return new WaitForSeconds(0.2f);
 
@@ -1687,14 +1689,35 @@ public class Chapter3ExperimentManager : MonoBehaviour
             string opt = opts[i];  // 捕获变量
             cbs[i] = () => {
                 lastSelectedOption = opt;
-                // 记录此次选择到答题历史
                 if (!questionAnswerHistory.ContainsKey(currentQuestionId))
                     questionAnswerHistory[currentQuestionId] = new List<string>();
                 questionAnswerHistory[currentQuestionId].Add(opt);
                 StartCoroutine(SendAnswerToAI());
             };
         }
+        // 在气泡上方显示"再试一次吧：[题目]"
+        string retryQ = !string.IsNullOrEmpty(aiCurrentQuestion)
+            ? aiCurrentQuestion
+            : GetPresetQuestionFallback(currentQuestionId);
+        ShowRetryHint("再试一次吧：" + retryQ);
         ShowChoiceBubble(opts, cbs);
+    }
+
+    void ShowRetryHint(string text)
+    {
+        var canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+        var go = new GameObject("RetryHint");
+        go.transform.SetParent(canvas.transform, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.02f, 0.145f);
+        rt.anchorMax = new Vector2(0.75f, 0.225f);
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        go.AddComponent<Image>().color = new Color(0.04f, 0.08f, 0.21f, 0.88f);
+        MakeBorder(go, CYAN, 1.5f);
+        MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(10,4), V2(-10,-4),
+            text, 13, CREAM, TextAlignmentOptions.MidlineLeft, false);
+        extraButtons.Add(go);
     }
 
     // AI 消息显示（带回调，用于 LearningTracker 非阻塞队列）
@@ -1901,10 +1924,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         MakeTMP("T",laserGo.transform,V2(0,0),V2(1,1),V2(2,2),V2(-2,-2),
             "开启入射光线",16,Color.white,TextAlignmentOptions.Center,true);
 
-        // 光线
-        incidentLine  = MakeRayLine("Incident",  LASER);
-        reflectedLine = MakeRayLine("Reflected", LASERW);
-        refractedLine = MakeRayLine("Refracted", LASER);
+        // 光线（含方向箭头）
+        incidentLine  = MakeRayLine("Incident",  LASER,  pointToPivot: true);
+        reflectedLine = MakeRayLine("Reflected", LASERW, pointToPivot: false);
+        refractedLine = MakeRayLine("Refracted", LASER,  pointToPivot: false);
 
         // 角度标注
         incidentAngleLabel = MakeAngleLabel("IncLbl");
@@ -1942,7 +1965,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         return tmp;
     }
 
-    Image MakeRayLine(string name, Color color)
+    Image MakeRayLine(string name, Color color, bool pointToPivot = false)
     {
         var go = new GameObject(name);
         go.transform.SetParent(experimentArea, false);
@@ -1953,6 +1976,24 @@ public class Chapter3ExperimentManager : MonoBehaviour
         rt.anchoredPosition = Vector2.zero;
         var img = go.AddComponent<Image>();
         img.color = color; img.raycastTarget = false;
+
+        // 方向箭头（▶ 放在线段60%处，入射光反向）
+        var arrowGo = new GameObject("Arrow");
+        arrowGo.transform.SetParent(go.transform, false);
+        var aRt = arrowGo.AddComponent<RectTransform>();
+        aRt.anchorMin = aRt.anchorMax = Vector2.zero;
+        aRt.pivot = new Vector2(0.5f, 0.5f);
+        aRt.sizeDelta = new Vector2(14f, 14f);
+        aRt.anchoredPosition = new Vector2(72f, 0);  // 60% of 120
+        if (pointToPivot) aRt.localRotation = Quaternion.Euler(0, 0, 180f);
+        var aTmp = arrowGo.AddComponent<TextMeshProUGUI>();
+        ApplyFont(aTmp);
+        aTmp.text = "▶";
+        aTmp.fontSize = 11;
+        aTmp.color = Color.white;
+        aTmp.alignment = TextAlignmentOptions.Center;
+        aTmp.raycastTarget = false;
+
         return img;
     }
 
@@ -2066,6 +2107,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         var rt = line.GetComponent<RectTransform>();
         rt.sizeDelta = new Vector2(len,3f);
         rt.localRotation = Quaternion.Euler(0,0,angleDeg);
+        // 箭头跟随线段长度，保持在60%位置
+        var arrow = line.GetComponentInChildren<RectTransform>(true);
+        if (arrow != null && arrow != rt)
+            arrow.anchoredPosition = new Vector2(len * 0.6f, 0);
     }
 
     // ══════════════════════════════════════════
