@@ -711,12 +711,68 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void OnIntroFinished()
     {
-        stage = 1;
-        Show(shanShanPanel);
-        LearningTracker.learningTrackerEnabled = true;  // 开启学习追踪
-        StartCoroutine(ClearSession());
-        // 直接显示欢迎语，不需要调API
-        ShanShanSayLocal("嗨柯南！我是闪闪！实验台已经就位啦，点一下那个按钮开启光线，我们一起看看会发生什么！", true);
+        ShowUsageGuide(() => {
+            stage = 1;
+            Show(shanShanPanel);
+            LearningTracker.learningTrackerEnabled = true;
+            StartCoroutine(ClearSession());
+            ShanShanSayLocal("嗨柯南！我是闪闪！实验台已经就位啦，点一下那个按钮开启光线，我们一起看看会发生什么！", true);
+        });
+    }
+
+    void ShowUsageGuide(System.Action onConfirm)
+    {
+        var canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) { onConfirm?.Invoke(); return; }
+
+        // 全屏遮罩
+        var overlay = new GameObject("UsageGuideOverlay");
+        overlay.transform.SetParent(canvas.transform, false);
+        FillRect(overlay);
+        overlay.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.78f);
+
+        // 卡片
+        var card = new GameObject("GuideCard");
+        card.transform.SetParent(overlay.transform, false);
+        var cRt = card.AddComponent<RectTransform>();
+        cRt.anchorMin = new Vector2(0.06f, 0.03f);
+        cRt.anchorMax = new Vector2(0.94f, 0.97f);
+        cRt.offsetMin = cRt.offsetMax = Vector2.zero;
+        card.AddComponent<Image>().color = NAVY;
+        MakeBorder(card, CYAN, 2f);
+
+        // 标题
+        MakeTMP("Title", card.transform,
+            V2(0.01f,0.90f), V2(0.99f,1f), V2(0,2), V2(0,-2),
+            "光路追踪眼镜  使用说明", 21, CYAN, TextAlignmentOptions.Center, true);
+
+        // 分隔线
+        MakeImg("Div", card.transform,
+            V2(0.03f,0.883f), V2(0.97f,0.888f), V2(0,0), V2(0,0),
+            new Color(0.3f,0.8f,1f,0.35f));
+
+        // 内容
+        string body =
+            "1.  拖动底部滑块调整入射角，实时观察光线在水面的折射与反射变化。\n\n" +
+            "2.  滑块变为半透明时表示已锁定——请先回答闪闪的问题，答对后自动解锁。\n\n" +
+            "3.  每个阶段答对题目才能进入下一探索阶段；答错没关系，闪闪会陪你重新尝试。\n\n" +
+            "4.  点击「点我随时问」按钮，可随时向闪闪提问，例如：\n" +
+            "     "折射定律是什么？"  "为什么会发生全反射？"\n\n" +
+            "5.  闪闪不会直接给答案，而是用反问引导你自己发现规律——这才是真正的理解！\n\n" +
+            "6.  答错时，闪闪会根据你的具体思路给出个性化分析，帮你找到认知漏洞所在。\n\n" +
+            "7.  全部完成后，可查看并下载专属个性化实验报告，了解哪些光学概念还需加强。\n\n" +
+            "8.  完成后可选择再次探索以加深理解，或前往下一关继续追查古币消失的真相。\n\n" +
+            "9.  随时按 Esc 键可返回主菜单。";
+
+        var cTmp = MakeTMP("Body", card.transform,
+            V2(0f,0.10f), V2(1f,0.88f), V2(28,6), V2(-28,-4),
+            body, 13, Color.white, TextAlignmentOptions.TopLeft, false);
+        cTmp.lineSpacing = 4f;
+
+        // 确认按钮
+        MakeActionButton("我知道了，开始探索！", CYAN,
+            () => { Destroy(overlay); onConfirm?.Invoke(); },
+            V2(0.25f,0.01f), V2(0.75f,0.09f), card.transform);
     }
 
     // ══════════════════════════════════════════

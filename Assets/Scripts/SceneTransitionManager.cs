@@ -79,6 +79,8 @@ public class SceneTransitionManager : MonoBehaviour
     {
         if (instance != null)
             instance.StartCoroutine(instance.FadeAndLoad(sceneName));
+        else
+            UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
     }
 
     IEnumerator FadeAndLoad(string sceneName)
