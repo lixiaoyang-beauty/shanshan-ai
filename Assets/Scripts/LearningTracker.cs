@@ -107,9 +107,9 @@ public class LearningTracker : MonoBehaviour
             }
         }
 
-        // 只在玩家重新开始滑动时才显示队列中的AI消息，且不能在等待选项时打扰
+        // 队列有消息且不在等待选项时立即显示（无需等滑块移动）
         bool isWaitingChoice = chapterManager != null && chapterManager.IsWaitingForChoice();
-        if (isMovingSlider && aiMessageQueue.Count > 0 && !isShowingAiMessage && !isWaitingChoice)
+        if (aiMessageQueue.Count > 0 && !isShowingAiMessage && !isWaitingChoice)
         {
             ShowNextAiMessage();
         }

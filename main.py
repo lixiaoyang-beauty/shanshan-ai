@@ -783,7 +783,7 @@ def hint(req: HintRequest):
         {"role": "user", "name": "柯南", "content": req.hint_context}
     ]
 
-    raw = call_minimax(messages, max_tokens=200)
+    raw = call_minimax(messages, max_tokens=400)
 
     if raw and raw.strip():
         text = raw.strip()[:30]

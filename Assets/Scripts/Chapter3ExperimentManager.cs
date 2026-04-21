@@ -1714,10 +1714,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         var go = new GameObject("RetryHint");
         go.transform.SetParent(canvas.transform, false);
         var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.02f, 0.145f);
-        rt.anchorMax = new Vector2(0.75f, 0.225f);
+        rt.anchorMin = new Vector2(0.18f, 0.145f);
+        rt.anchorMax = new Vector2(0.92f, 0.225f);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
-        var hTmp = MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(20,0), V2(0,0),
+        var hTmp = MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(0,0), V2(0,0),
             text, 19, Color.white, TextAlignmentOptions.Center, true);
         hTmp.enableWordWrapping = false;
         hTmp.overflowMode = TextOverflowModes.Overflow;
