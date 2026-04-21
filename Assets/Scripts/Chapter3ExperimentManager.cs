@@ -46,6 +46,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
     [Header("── 学习追踪 ──")]
     public LearningTracker learningTracker;
 
+    [Header("── 返回首页 ──")]
+    public UnityEngine.UI.Button homeButton;
+
     // 实验区域
     private RectTransform experimentArea;
     private Image incidentLine, reflectedLine, refractedLine;
@@ -191,6 +194,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
         if (learningTracker == null)
             learningTracker = FindObjectOfType<LearningTracker>();
 
+        if (homeButton != null)
+            homeButton.onClick.AddListener(GoHome);
+
         Debug.Log("=== Chapter3ExperimentManager Start === learningTracker=" + (learningTracker != null));
 
         StartCoroutine(StartChapter());
@@ -201,6 +207,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     {
         if (isInDialogue && Input.GetKeyDown(KeyCode.Return)) OnContinue();
         if (Input.GetKeyDown(KeyCode.Tab) && stage >= 2) ToggleAnalysisMode();
+        if (Input.GetKeyDown(KeyCode.Escape)) GoHome();
 
         if (stage >= 2 && stage <= 6 && laserOn)
         {
@@ -2374,6 +2381,12 @@ public class Chapter3ExperimentManager : MonoBehaviour
     void Hide(GameObject go) { if (go != null) go.SetActive(false); }
     void ApplyFont(TextMeshProUGUI t) { if (chineseFont != null) t.font = chineseFont; }
     static Vector2 V2(float x, float y) => new Vector2(x, y);
+
+    public void GoHome()
+    {
+        AudioManager.PlayClick();
+        UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+    }
     string EscapeJson(string s) =>
         s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n");
 
