@@ -765,7 +765,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
             "9.  随时按 Esc 键可返回主菜单。";
 
         var cTmp = MakeTMP("Body", card.transform,
-            V2(0.08f,0.10f), V2(0.92f,0.88f), V2(0,6), V2(0,-4),
+            V2(0.14f,0.10f), V2(0.96f,0.88f), V2(0,6), V2(0,-4),
             body, 20, Color.white, TextAlignmentOptions.Left, false);
         cTmp.lineSpacing = 4f;
 
