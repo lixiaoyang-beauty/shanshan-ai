@@ -1540,9 +1540,18 @@ public class Chapter3ExperimentManager : MonoBehaviour
         }
 
         // 答对 → advance（进入下一阶段）
-        if (nextAction == "advance" || (correct && string.IsNullOrEmpty(nextAction)))
+        if (nextAction == "advance" || nextAction == "discovery_card" || (correct && string.IsNullOrEmpty(nextAction)))
         {
             AudioManager.PlayCorrect();
+            // q_total_reflection 重试后答对：显示正确反馈 → 弹发现卡片
+            if (currentQuestionId == "q_total_reflection")
+            {
+                wrongAttempts = 0;
+                ShanShanSayLocal(GetCorrectFeedback("q_total_reflection"), true);
+                UnlockSlider();
+                StartCoroutine(DelayDo(1.8f, ShowDiscoveryCard));
+                return;
+            }
             // q_verify 在 ShowAIOptionBubble 重试后答对：需要手动触发 EarnStar 和 q_coin 流程
             if (currentQuestionId == "q_verify" && !verifyDone)
             {
@@ -1708,8 +1717,10 @@ public class Chapter3ExperimentManager : MonoBehaviour
         rt.anchorMin = new Vector2(0.02f, 0.145f);
         rt.anchorMax = new Vector2(0.75f, 0.225f);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
-        MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(0,0), V2(0,0),
-            text, 17, Color.black, TextAlignmentOptions.Center, false);
+        var hTmp = MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(0,0), V2(0,0),
+            text, 19, Color.white, TextAlignmentOptions.Center, true);
+        hTmp.enableWordWrapping = false;
+        hTmp.overflowMode = TextOverflowModes.Overflow;
         extraButtons.Add(go);
     }
 
@@ -1732,7 +1743,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         rt.anchoredPosition = pos;
         rt.localRotation = Quaternion.Euler(0f, 0f, angle);
         var img = go.AddComponent<Image>();
-        img.color = Color.black; img.raycastTarget = false;
+        img.color = Color.white; img.raycastTarget = false;
     }
 
     // 外部查询：当前是否在等待玩家选择选项
@@ -1993,9 +2004,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
         aRt.sizeDelta = Vector2.zero;
         aRt.anchoredPosition = new Vector2(72f, 0);  // 60% of 120
         if (pointToPivot) aRt.localRotation = Quaternion.Euler(0, 0, 180f);
-        // 顶点在 (0,0) 即线条中心；两条笔画从线条上下两侧向外展开，形成 ">" 形
-        MakeChevronStroke(arrowGo.transform, new Vector2(-5f,  5f), -45f);
-        MakeChevronStroke(arrowGo.transform, new Vector2(-5f, -5f),  45f);
+        // 顶点精确在 (0,0)：stroke长8，45°偏移 = 8/√2 ≈ 5.66，上下完全对称
+        MakeChevronStroke(arrowGo.transform, new Vector2(-5.66f,  5.66f), -45f);
+        MakeChevronStroke(arrowGo.transform, new Vector2(-5.66f, -5.66f),  45f);
 
         return img;
     }
