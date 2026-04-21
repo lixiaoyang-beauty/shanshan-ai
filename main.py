@@ -18,7 +18,7 @@ app.add_middleware(
 # MiniMax API 配置
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_API_URL = "https://api.minimaxi.com/v1/text/chatcompletion_v2"
-MINIMAX_MODEL = "MiniMax-M2-her"
+MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
 
 # 学习轨迹存储
 learning_sessions: Dict[str, "LearningTrajectory"] = {}
@@ -251,7 +251,7 @@ PRESET_QUESTIONS = {
     "q_verify": {
         "question": "太厉害了！发现了全反射现象！咦，不过要发生全反射可没那么简单哦～还记得发现卡片里说的两个条件吗？一起说说是哪两个？",
         "options": [
-            "光从水射向空气，人射角>=临界角",
+            "光从水射向空气，入射角>=临界角",
             "光从空气射向水，角度越大越好",
             "只要角度够大就会全反射"
         ]
