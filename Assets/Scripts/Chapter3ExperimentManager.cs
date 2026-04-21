@@ -510,6 +510,11 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 AddMisconceptionRow("古币消失", MISCONCEPTION_DATA[5, 1] + "||" + MISCONCEPTION_DATA[5, 2] + "||" + MISCONCEPTION_DATA[5, 3], questionWrongCount["q_coin"]);
         }
 
+        // 中：下载学习报告
+        MakeActionButton("下载学习报告", new Color(0.25f, 0.75f, 0.35f, 1f),
+            () => DownloadLearningReport(),
+            V2(0.34f, 0.02f), V2(0.66f, 0.09f), panel.transform);
+
         // 左：重新探索按钮
         MakeActionButton("重新探索试试", CYAN,
             () => {
@@ -572,14 +577,91 @@ public class Chapter3ExperimentManager : MonoBehaviour
                 if (angleSlider != null) angleSlider.interactable = false;
                 StartCoroutine(StartChapter());
             },
-            V2(0.02f, 0.02f), V2(0.49f, 0.09f), panel.transform);
+            V2(0.02f, 0.02f), V2(0.32f, 0.09f), panel.transform);
 
         // 右：继续回博物馆按钮
         MakeActionButton("继续回博物馆破案！", GOLD,
             () => { Destroy(overlay); StartAllyEnding(); },
-            V2(0.51f, 0.02f), V2(0.98f, 0.09f), panel.transform);
+            V2(0.68f, 0.02f), V2(0.98f, 0.09f), panel.transform);
 
         StartCoroutine(PopIn(pRt));
+    }
+
+    // ══════════════════════════════════════════
+    // 下载学习报告
+    // ══════════════════════════════════════════
+    void DownloadLearningReport()
+    {
+        try
+        {
+            string content = GenerateReportText();
+            string desktop = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+            string filename = "光学实验学习报告_" + System.DateTime.Now.ToString("yyyyMMdd_HHmm") + ".txt";
+            string path = System.IO.Path.Combine(desktop, filename);
+            System.IO.File.WriteAllText(path, content, System.Text.Encoding.UTF8);
+            ShowToast("报告已保存到桌面：" + filename);
+        }
+        catch (System.Exception e)
+        {
+            ShowToast("保存失败：" + e.Message);
+        }
+    }
+
+    string GenerateReportText()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("=== 消失的古币 · 光学实验探索报告 ===");
+        sb.AppendLine("生成时间：" + System.DateTime.Now.ToString("yyyy年MM月dd日 HH:mm"));
+        sb.AppendLine();
+
+        int totalWrong = 0;
+        foreach (var v in questionWrongCount.Values) totalWrong += v;
+
+        if (totalWrong == 0)
+        {
+            sb.AppendLine("【总体评价】本次实验全部答对！理解非常优秀！");
+        }
+        else
+        {
+            sb.AppendLine("【总体评价】本次共答错 " + totalWrong + " 次");
+            sb.AppendLine();
+            sb.AppendLine("【需要加强的概念】");
+            string[] qIds = { "q_line_count", "q_refraction_rule", "q_critical_angle", "q_total_reflection", "q_verify", "q_coin" };
+            for (int i = 0; i < qIds.Length; i++)
+            {
+                if (questionWrongCount.ContainsKey(qIds[i]) && questionWrongCount[qIds[i]] > 0)
+                {
+                    int count = questionWrongCount[qIds[i]];
+                    sb.AppendLine();
+                    sb.AppendLine("▌ " + MISCONCEPTION_DATA[i, 0] + "（答错 " + count + " 次）");
+                    sb.AppendLine("  常见误解：" + MISCONCEPTION_DATA[i, 1]);
+                    sb.AppendLine("  正确理解：" + MISCONCEPTION_DATA[i, 2]);
+                    sb.AppendLine("  实验现象：" + MISCONCEPTION_DATA[i, 3]);
+                }
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("=== 消失的古币 · 光路追踪实验室 ===");
+        return sb.ToString();
+    }
+
+    void ShowToast(string msg)
+    {
+        var canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+        var toast = new GameObject("Toast");
+        toast.transform.SetParent(canvas.transform, false);
+        var rt = toast.AddComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.1f, 0.06f);
+        rt.anchorMax = new Vector2(0.9f, 0.13f);
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        toast.AddComponent<Image>().color = new Color(0.05f, 0.35f, 0.1f, 0.92f);
+        MakeBorder(toast, new Color(0.3f, 0.9f, 0.4f, 0.7f), 1.5f);
+        MakeTMP("Msg", toast.transform,
+            V2(0f, 0f), V2(1f, 1f), V2(12, 4), V2(-12, -4),
+            msg, 15, Color.white, TextAlignmentOptions.Center, false);
+        Destroy(toast, 3.5f);
     }
 
     // 迷思概念详情弹窗
