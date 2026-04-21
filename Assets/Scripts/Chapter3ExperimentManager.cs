@@ -1709,7 +1709,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         rt.anchorMax = new Vector2(0.75f, 0.225f);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
         MakeTMP("T", go.transform, V2(0,0), V2(1,1), V2(0,0), V2(0,0),
-            text, 13, CREAM, TextAlignmentOptions.MidlineLeft, false);
+            text, 17, Color.black, TextAlignmentOptions.Center, false);
         extraButtons.Add(go);
     }
 
@@ -1721,18 +1721,18 @@ public class Chapter3ExperimentManager : MonoBehaviour
         StartCoroutine(AiMessageDoneDelay(msg.Length * 0.04f + 0.5f, onDone));
     }
 
-    void MakeChevronStroke(Transform parent, Color color, Vector2 pos, float angle)
+    void MakeChevronStroke(Transform parent, Vector2 pos, float angle)
     {
         var go = new GameObject("Stroke");
         go.transform.SetParent(parent, false);
         var rt = go.AddComponent<RectTransform>();
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0f, 0.5f);
-        rt.sizeDelta = new Vector2(8f, 2f);
+        rt.sizeDelta = new Vector2(8f, 2.5f);
         rt.anchoredPosition = pos;
         rt.localRotation = Quaternion.Euler(0f, 0f, angle);
         var img = go.AddComponent<Image>();
-        img.color = color; img.raycastTarget = false;
+        img.color = Color.black; img.raycastTarget = false;
     }
 
     // 外部查询：当前是否在等待玩家选择选项
@@ -1993,8 +1993,9 @@ public class Chapter3ExperimentManager : MonoBehaviour
         aRt.sizeDelta = Vector2.zero;
         aRt.anchoredPosition = new Vector2(72f, 0);  // 60% of 120
         if (pointToPivot) aRt.localRotation = Quaternion.Euler(0, 0, 180f);
-        MakeChevronStroke(arrowGo.transform, color, new Vector2(-2f,  3.5f), -45f);
-        MakeChevronStroke(arrowGo.transform, color, new Vector2(-2f, -3.5f),  45f);
+        // 顶点在 (0,0) 即线条中心；两条笔画从线条上下两侧向外展开，形成 ">" 形
+        MakeChevronStroke(arrowGo.transform, new Vector2(-5f,  5f), -45f);
+        MakeChevronStroke(arrowGo.transform, new Vector2(-5f, -5f),  45f);
 
         return img;
     }

@@ -527,7 +527,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "闪闪", "content": analysis_content}
         ]
 
-        ai_message = call_minimax(messages, max_tokens=600)
+        ai_message = call_minimax(messages, max_tokens=1200)
 
         guided_feedback = ""
         if ai_message and ai_message.strip():
@@ -546,11 +546,11 @@ def chat(req: ChatRequest):
                 import json
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(raw)
-                guided_feedback = data.get("guided", "")[:65]
+                guided_feedback = data.get("guided", "")
                 print(f"[/chat] MiniMax guided: '{guided_feedback}'")
             except:
                 # JSON 解析仍失败：原文直接使用
-                guided_feedback = raw[:65] if raw else ""
+                guided_feedback = raw if raw else ""
                 print(f"[/chat] JSON解析失败，使用原文: '{guided_feedback}'")
 
         # AI 失败时，本地兜底（C# 的 GetWrongHint 也会处理，这里是双保险）

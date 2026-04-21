@@ -98,7 +98,8 @@ public class LearningTracker : MonoBehaviour
 
             // 闲置超过阈值，且还没发过这次闲置的提示
             float idle = Time.time - lastActivityTime;
-            if (learningTrackerEnabled && idle >= stagnantThreshold && !stagnantAlertShown)
+            bool waitingChoice = chapterManager != null && chapterManager.IsWaitingForChoice();
+            if (learningTrackerEnabled && idle >= stagnantThreshold && !stagnantAlertShown && !waitingChoice)
             {
                 stagnantAlertShown = true;
                 Debug.Log("[LearningTracker] 玩家闲置超过" + stagnantThreshold + "秒，发送学习数据请求");
