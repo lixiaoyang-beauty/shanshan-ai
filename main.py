@@ -1,4 +1,5 @@
 import os
+import time
 import uvicorn
 import requests
 import threading
@@ -336,32 +337,40 @@ def call_minimax(messages: List[Dict], max_tokens: int = 600) -> Optional[str]:
             "thinking_type": "disabled",
             "thinking_budget": 0
         }
-        try:
-            response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
-            print(f"[MiniMax] 响应状态码: {response.status_code}")
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                except Exception:
-                    import json as _json
-                    decoder = _json.JSONDecoder()
-                    data, _ = decoder.raw_decode(response.text.strip())
-                print(f"[MiniMax] 原始响应: {data}")
-                choices = data.get("choices", [])
-                if choices:
-                    first_choice = choices[0]
-                    if first_choice.get("finish_reason") == "length":
-                        print("[MiniMax] truncated, returning None")
-                        return None
-                    msg = first_choice.get("message", {})
-                    content = msg.get("content") or msg.get("text") or ""
-                    print(f"[MiniMax] content: '{str(content)[:80]}'")
-                    if content and str(content).strip():
-                        return str(content).strip()
-            else:
-                print(f"[MiniMax] 非200状态码: {response.status_code}")
-        except Exception as e:
-            print(f"[MiniMax API Error] {e}")
+        for attempt in range(2):  # 最多重试1次
+            try:
+                response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
+                print(f"[MiniMax] 响应状态码: {response.status_code}")
+                if response.status_code == 529:
+                    print(f"[MiniMax] 529过载，等待3秒后重试（attempt={attempt}）")
+                    time.sleep(3)
+                    continue
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                    except Exception:
+                        import json as _json
+                        decoder = _json.JSONDecoder()
+                        data, _ = decoder.raw_decode(response.text.strip())
+                    print(f"[MiniMax] 原始响应: {data}")
+                    choices = data.get("choices", [])
+                    if choices:
+                        first_choice = choices[0]
+                        if first_choice.get("finish_reason") == "length":
+                            print("[MiniMax] truncated, returning None")
+                            return None
+                        msg = first_choice.get("message", {})
+                        content = msg.get("content") or msg.get("text") or ""
+                        print(f"[MiniMax] content: '{str(content)[:80]}'")
+                        if content and str(content).strip():
+                            return str(content).strip()
+                    break
+                else:
+                    print(f"[MiniMax] 非200状态码: {response.status_code}")
+                    break
+            except Exception as e:
+                print(f"[MiniMax API Error] {e}")
+                break
         return None
     finally:
         _minimax_lock.release()
@@ -536,7 +545,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "闪闪", "content": analysis_content}
         ]
 
-        ai_message = call_minimax(messages, max_tokens=500)
+        ai_message = call_minimax(messages, max_tokens=1200)
 
         guided_feedback = ""
         if ai_message and ai_message.strip():
@@ -599,7 +608,7 @@ def chat(req: ChatRequest):
             {"role": "user", "name": "柯南", "content": free_question_prompt}
         ]
 
-        raw = call_minimax(messages, max_tokens=800)
+        raw = call_minimax(messages, max_tokens=1200)
 
         reply = ""
         if raw and raw.strip():
@@ -728,7 +737,7 @@ def receive_learning_data(req: LearningDataRequest):
         {"role": "user", "name": "闪闪", "content": analysis_content}
     ]
 
-    ai_message = call_minimax(messages, max_tokens=300)
+    ai_message = call_minimax(messages, max_tokens=1200)
 
     socratic = ""
     if ai_message and ai_message.strip():
@@ -792,7 +801,7 @@ def hint(req: HintRequest):
         {"role": "user", "name": "柯南", "content": req.hint_context}
     ]
 
-    raw = call_minimax(messages, max_tokens=400)
+    raw = call_minimax(messages, max_tokens=1200)
 
     if raw and raw.strip():
         text = raw.strip()[:30]
