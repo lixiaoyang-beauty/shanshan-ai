@@ -1,6 +1,7 @@
 import os
 import uvicorn
 import requests
+import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -309,53 +310,61 @@ PRESET_ANSWERS = {
 }
 
 
+# MiniMax 并发限制：同时只允许1个请求，避免529过载
+_minimax_lock = threading.Semaphore(1)
+
 # ========== MiniMax AI 调用 ==========
 def call_minimax(messages: List[Dict], max_tokens: int = 600) -> Optional[str]:
     print(f"[MiniMax] 调用开始，API_KEY存在={bool(MINIMAX_API_KEY)}")
     if not MINIMAX_API_KEY:
         print("[MiniMax] API_KEY为空，跳过")
         return None
-    headers = {
-        "Authorization": f"Bearer {MINIMAX_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": MINIMAX_MODEL,
-        "messages": messages,
-        "max_completion_tokens": max_tokens,
-        "temperature": 0.8,
-        "thinking_type": "disabled",
-        "thinking_budget": 0
-    }
+    acquired = _minimax_lock.acquire(timeout=25)
+    if not acquired:
+        print("[MiniMax] 等待锁超时，跳过本次调用")
+        return None
     try:
-        response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
-        print(f"[MiniMax] 响应状态码: {response.status_code}")
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                # MiniMax 有时返回 extra data（多段 JSON），取第一段
-                import json as _json
-                decoder = _json.JSONDecoder()
-                data, _ = decoder.raw_decode(response.text.strip())
-            print(f"[MiniMax] 原始响应: {data}")  # 调试：看实际返回结构
-            choices = data.get("choices", [])
-            if choices:
-                first_choice = choices[0]
-                # finish_reason=length 表示被截断，content为空，返回None让C#走兜底
-                if first_choice.get("finish_reason") == "length":
-                    print("[MiniMax] truncated, returning None")
-                    return None
-                msg = first_choice.get("message", {})
-                content = msg.get("content") or msg.get("text") or ""
-                print(f"[MiniMax] content: '{str(content)[:80]}'")
-                if content and str(content).strip():
-                    return str(content).strip()
-        else:
-            print(f"[MiniMax] 非200状态码: {response.status_code}")
-    except Exception as e:
-        print(f"[MiniMax API Error] {e}")
-    return None
+        headers = {
+            "Authorization": f"Bearer {MINIMAX_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": MINIMAX_MODEL,
+            "messages": messages,
+            "max_completion_tokens": max_tokens,
+            "temperature": 0.8,
+            "thinking_type": "disabled",
+            "thinking_budget": 0
+        }
+        try:
+            response = requests.post(MINIMAX_API_URL, json=payload, headers=headers, timeout=30)
+            print(f"[MiniMax] 响应状态码: {response.status_code}")
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                except Exception:
+                    import json as _json
+                    decoder = _json.JSONDecoder()
+                    data, _ = decoder.raw_decode(response.text.strip())
+                print(f"[MiniMax] 原始响应: {data}")
+                choices = data.get("choices", [])
+                if choices:
+                    first_choice = choices[0]
+                    if first_choice.get("finish_reason") == "length":
+                        print("[MiniMax] truncated, returning None")
+                        return None
+                    msg = first_choice.get("message", {})
+                    content = msg.get("content") or msg.get("text") or ""
+                    print(f"[MiniMax] content: '{str(content)[:80]}'")
+                    if content and str(content).strip():
+                        return str(content).strip()
+            else:
+                print(f"[MiniMax] 非200状态码: {response.status_code}")
+        except Exception as e:
+            print(f"[MiniMax API Error] {e}")
+        return None
+    finally:
+        _minimax_lock.release()
 
 
 # ========== 学习轨迹类 ==========
