@@ -1217,23 +1217,55 @@ public class Chapter3ExperimentManager : MonoBehaviour
         MakeBorder(card, CYAN, 3f);
 
         MakeTMP("Title", card.transform,
-            V2(0f,0.87f),V2(1f,1f),V2(20,5),V2(-20,-5),
+            V2(0f,0.88f),V2(1f,1f),V2(20,5),V2(-20,-5),
             "重大发现！全反射！",28,CYAN,TextAlignmentOptions.Center,true);
         MakeImg("Div",card.transform,
-            V2(0.02f,0.865f),V2(0.98f,0.868f),V2(0,0),V2(0,0),
+            V2(0.02f,0.875f),V2(0.98f,0.878f),V2(0,0),V2(0,0),
             new Color(0f,0.82f,1f,0.4f));
-        MakeTMP("Body",card.transform,
-            V2(0f,0.60f),V2(1f,0.865f),V2(20,8),V2(-20,-8),
-            "全反射现象：\n折射光完全消失，所有光反射回水中！\n\n发生全反射的两个必要条件：\n\n条件1：光从光密介质射向光疏介质\n（折射率大到折射率小，如水到空气）\n\n条件2：入射角大于或等于临界角\n（水的临界角约为48度）",
-            16,CREAM,TextAlignmentOptions.Center,false);
+
+        // 现象描述（紧贴分割线下方）
+        MakeTMP("Phenomenon",card.transform,
+            V2(0f,0.83f),V2(1f,0.875f),V2(16,2),V2(-16,-2),
+            "全反射现象：折射光完全消失，所有光反射回水中！",
+            18,CREAM,TextAlignmentOptions.Center,false);
+
+        // 条件1 框
+        var box1 = new GameObject("Box1");
+        var bRt1 = box1.AddComponent<RectTransform>();
+        bRt1.SetParent(card.transform, false);
+        bRt1.anchorMin = V2(0.03f,0.63f);
+        bRt1.anchorMax = V2(0.485f,0.825f);
+        bRt1.offsetMin = bRt1.offsetMax = Vector2.zero;
+        box1.AddComponent<Image>().color = new Color(0f,0.12f,0.28f,1f);
+        MakeBorder(box1, CYAN, 2f);
+        MakeTMP("C1", box1.transform,
+            V2(0f,0f),V2(1f,1f),V2(10,6),V2(-10,-6),
+            "条件 1\n光从光密→光疏\n（如水→空气）",
+            18,CREAM,TextAlignmentOptions.Center,false);
+
+        // 条件2 框
+        var box2 = new GameObject("Box2");
+        var bRt2 = box2.AddComponent<RectTransform>();
+        bRt2.SetParent(card.transform, false);
+        bRt2.anchorMin = V2(0.515f,0.63f);
+        bRt2.anchorMax = V2(0.97f,0.825f);
+        bRt2.offsetMin = bRt2.offsetMax = Vector2.zero;
+        box2.AddComponent<Image>().color = new Color(0f,0.12f,0.28f,1f);
+        MakeBorder(box2, CYAN, 2f);
+        MakeTMP("C2", box2.transform,
+            V2(0f,0f),V2(1f,1f),V2(10,6),V2(-10,-6),
+            "条件 2\n入射角 ≥ 临界角\n（水约 48°）",
+            18,CREAM,TextAlignmentOptions.Center,false);
+
+        // 秘密说明（串联案件）
         MakeTMP("Sub",card.transform,
-            V2(0f,0.14f),V2(1f,0.60f),V2(20,4),V2(-20,-4),
-            "这就是古币消失的秘密所在！\n\n从正上方俯视时，光从古币出发，以较小的角度射向水面，顺利折射进入空气，到达你的眼睛——古币清晰可见。\n\n当你蹲下，视角逐渐压低，光的入射角随之持续增大。当入射角增大到恰好等于临界角（水约48°）的瞬间，就是古币从「可见」变为「消失」的临界点——一旦超过这个角度，所有光线全部反射回水中，没有一丝折射光射出水面，水面变得像镜子一样，古币彻底「消失」。\n\n还记得案件重现时，你蹲到某个角度古币突然消失了吗？那正是因为你的视线恰好越过了全反射的临界角！",
-            14,new Color(1f,0.85f,0.3f,1f),TextAlignmentOptions.Left,false);
+            V2(0f,0.13f),V2(1f,0.625f),V2(18,6),V2(-18,-6),
+            "<align=center><color=#FF5555>这就是古币消失的秘密所在！</color></align>\n\n从正上方俯视时，光从古币出发，以较小的角度射向水面，顺利折射进入空气，到达你的眼睛——古币清晰可见。\n\n当你蹲下，视角逐渐压低，光的入射角随之持续增大。当入射角增大到恰好等于<color=#FF5555>临界角</color>（水约48°）的瞬间，就是古币从「可见」变为「消失」的<color=#FF5555>临界点</color>——一旦超过这个角度，所有光线全部<color=#FF5555>全反射</color>回水中，没有一丝折射光射出水面，水面变得像镜子一样，古币彻底「消失」。\n\n还记得案件重现时，你蹲到某个角度古币突然消失了吗？那正是因为你的视线恰好越过了<color=#FF5555>全反射的临界角</color>！",
+            18,new Color(1f,0.85f,0.3f,1f),TextAlignmentOptions.Left,false);
 
         MakeActionButton("我明白了！",CYAN,
             () => { Destroy(overlay); stage = 6; StartCoroutine(DelayDo(0.5f, ShowVerifyPanel)); },
-            V2(0.2f,0.04f),V2(0.8f,0.14f),card.transform);
+            V2(0.2f,0.02f),V2(0.8f,0.12f),card.transform);
 
         StartCoroutine(PopIn(cRt));
     }
