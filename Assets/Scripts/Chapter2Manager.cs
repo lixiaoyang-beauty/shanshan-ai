@@ -348,7 +348,7 @@ public class Chapter2Manager : MonoBehaviour
                 {
                     ShowDialogue(new[]
                     {
-                        "我|古币……消失了？！明明刚才还在的！"
+                        "我|古币……消失了？！刚才慢慢蹲下来，到了这个角度才突然不见的……"
                     }, () => {
                         ShowHint("按 [ E ] 键站起来，从上方俯视烧杯！");
                     });
@@ -380,7 +380,8 @@ public class Chapter2Manager : MonoBehaviour
                     ShowDialogue(new[]
                     {
                         "我|等等……从上面看又出现了！",
-                        "我|从侧面看消失，从上面看出现……",
+                        "我|从正上方能看见，蹲低到某个角度之后才消失……",
+                        "我|难道……是视线的角度？好像低过了某个位置，它就突然不见了……",
                         "我|这到底是什么原理？我要去找艾莉博士求助一下！"
                     }, ShowFinishPanel);
                 }));
