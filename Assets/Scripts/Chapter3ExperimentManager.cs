@@ -146,7 +146,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
             es.AddComponent<EventSystem>();
             es.AddComponent<StandaloneInputModule>();
         }
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas != null && canvas.GetComponent<GraphicRaycaster>() == null)
             canvas.gameObject.AddComponent<GraphicRaycaster>();
 
@@ -414,7 +414,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowSummaryPanel(int totalWrong)
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
 
         var overlay = new GameObject("SummaryOverlay");
@@ -732,7 +732,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowToast(string msg)
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
         var toast = new GameObject("Toast");
         toast.transform.SetParent(canvas.transform, false);
@@ -757,7 +757,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         string correct = parts[1];
         string phenomenon = parts[2];
 
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
 
         var overlay = new GameObject("DetailOverlay");
@@ -888,7 +888,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowUsageGuide(System.Action onConfirm)
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) { onConfirm?.Invoke(); return; }
 
         // 全屏遮罩
@@ -1199,7 +1199,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         EarnStar(1);
         StartCoroutine(FlashScreen(new Color(0f,0.8f,1f,0.3f)));
 
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
 
         var overlay = new GameObject("DiscoveryOverlay");
@@ -1435,7 +1435,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         ClearBubbles();
         waitingForChoice = true;  // 暂停idle提示
         idleTimer = 0f;           // 重置计时
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
 
         bubbleContainer = new GameObject("Bubbles");
@@ -1970,7 +1970,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
 
     void ShowRetryHint(string text)
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
         var go = new GameObject("RetryHint");
         go.transform.SetParent(canvas.transform, false);
@@ -2127,7 +2127,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void BuildExperimentArea()
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
 
         var areaGo = new GameObject("ExperimentArea");
@@ -2392,7 +2392,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void BuildStarDisplay()
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
 
         var container = new GameObject("StarBar");
@@ -2474,7 +2474,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void BuildFlashOverlay()
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         if (canvas == null) return;
         var go = new GameObject("Flash");
         go.transform.SetParent(canvas.transform, false);
@@ -2556,7 +2556,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
         System.Action onClick, Vector2 ancMin, Vector2 ancMax,
         Transform parent = null)
     {
-        var canvas = FindObjectOfType<Canvas>();
+        var canvas = FindSceneCanvas();
         Transform p = parent != null ? parent : (canvas != null ? canvas.transform : null);
         if (p == null) return null;
 
@@ -2639,7 +2639,17 @@ public class Chapter3ExperimentManager : MonoBehaviour
     public void GoHome()
     {
         AudioManager.PlayClick();
-        UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        SceneTransitionManager.LoadScene("MainMenu");
+    }
+
+    // 只查找当前激活场景里的Canvas，避免找到DontDestroyOnLoad的FadeCanvas
+    Canvas FindSceneCanvas()
+    {
+        var activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        foreach (var c in FindObjectsOfType<Canvas>())
+            if (c.gameObject.scene == activeScene)
+                return c;
+        return null;
     }
     string EscapeJson(string s) =>
         s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n");
