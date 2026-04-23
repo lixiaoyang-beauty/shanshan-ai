@@ -347,7 +347,7 @@ public class Chapter2Manager : MonoBehaviour
                 {
                     ShowDialogue(new[]
                     {
-                        "我|古币……越来越模糊……蹲到这个角度，彻底消失了！"
+                        "我|古币……消失了！刚才慢慢蹲下来，越蹲越看不清，到了这个角度彻底消失了！"
                     }, () => {
                         ShowHint("按 [ E ] 键站起来，从上方俯视烧杯！");
                     });
