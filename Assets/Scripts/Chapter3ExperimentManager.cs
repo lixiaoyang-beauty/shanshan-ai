@@ -301,7 +301,7 @@ public class Chapter3ExperimentManager : MonoBehaviour
     // ══════════════════════════════════════════
     void GiveHint(int level)
     {
-        string context = $"玩家在阶段{stage}，hint等级{level}，当前角度{currentIncidentAngle:.1f}度，是否全反射={isTotalReflection}，生成一句简短提示（15字以内），不要选项，像朋友聊天一样。";
+        string context = $"玩家在阶段{stage}，hint等级{level}，当前角度{currentIncidentAngle:F1}度，是否全反射={isTotalReflection}，生成一句简短提示（15字以内），不要选项，像朋友聊天一样。";
         StartCoroutine(CallShanShanHint(context));
     }
     // ══════════════════════════════════════════
@@ -1223,13 +1223,13 @@ public class Chapter3ExperimentManager : MonoBehaviour
             V2(0.02f,0.865f),V2(0.98f,0.868f),V2(0,0),V2(0,0),
             new Color(0f,0.82f,1f,0.4f));
         MakeTMP("Body",card.transform,
-            V2(0f,0.35f),V2(1f,0.865f),V2(20,8),V2(-20,-8),
+            V2(0f,0.60f),V2(1f,0.865f),V2(20,8),V2(-20,-8),
             "全反射现象：\n折射光完全消失，所有光反射回水中！\n\n发生全反射的两个必要条件：\n\n条件1：光从光密介质射向光疏介质\n（折射率大到折射率小，如水到空气）\n\n条件2：入射角大于或等于临界角\n（水的临界角约为48度）",
-            22,CREAM,TextAlignmentOptions.Center,false);
+            16,CREAM,TextAlignmentOptions.Center,false);
         MakeTMP("Sub",card.transform,
-            V2(0f,0.20f),V2(1f,0.35f),V2(20,0),V2(-20,0),
-            "这就是古币消失的秘密所在！",
-            18,new Color(1f,0.85f,0.3f,1f),TextAlignmentOptions.Center,false);
+            V2(0f,0.14f),V2(1f,0.60f),V2(20,4),V2(-20,-4),
+            "这就是古币消失的秘密所在！\n\n从正上方俯视时，光从古币出发，以较小的角度射向水面，顺利折射进入空气，到达你的眼睛——古币清晰可见。\n\n当你蹲下，视角逐渐压低，光的入射角随之持续增大。当入射角增大到恰好等于临界角（水约48°）的瞬间，就是古币从「可见」变为「消失」的临界点——一旦超过这个角度，所有光线全部反射回水中，没有一丝折射光射出水面，水面变得像镜子一样，古币彻底「消失」。\n\n还记得案件重现时，你蹲到某个角度古币突然消失了吗？那正是因为你的视线恰好越过了全反射的临界角！",
+            14,new Color(1f,0.85f,0.3f,1f),TextAlignmentOptions.Left,false);
 
         MakeActionButton("我明白了！",CYAN,
             () => { Destroy(overlay); stage = 6; StartCoroutine(DelayDo(0.5f, ShowVerifyPanel)); },
