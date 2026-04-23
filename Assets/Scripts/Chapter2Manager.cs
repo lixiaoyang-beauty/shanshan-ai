@@ -335,11 +335,10 @@ public class Chapter2Manager : MonoBehaviour
         Hide(hintUI);
 
         if (heightCoroutine != null) StopCoroutine(heightCoroutine);
+        // 古币渐隐与摄像机下移同步启动
+        if (coinObject != null) StartCoroutine(FadeCoin(false));
         heightCoroutine = StartCoroutine(MoveCamera(crouchHeight, () =>
         {
-            // 摄像机到侧视高度，直接隐藏古币
-            if (coinObject != null) { coinObject.SetActive(false); Debug.Log("古币隐藏：CrouchDown"); }
-
             if (!seenDisappear)
             {
                 seenDisappear = true;
@@ -348,7 +347,7 @@ public class Chapter2Manager : MonoBehaviour
                 {
                     ShowDialogue(new[]
                     {
-                        "我|古币……消失了？！刚才慢慢蹲下来，到了这个角度才突然不见的……"
+                        "我|古币……越来越模糊……蹲到这个角度，彻底消失了！"
                     }, () => {
                         ShowHint("按 [ E ] 键站起来，从上方俯视烧杯！");
                     });
@@ -366,11 +365,10 @@ public class Chapter2Manager : MonoBehaviour
         Hide(hintUI);
 
         if (heightCoroutine != null) StopCoroutine(heightCoroutine);
+        // 古币渐显与摄像机上移同步启动
+        if (coinObject != null) StartCoroutine(FadeCoin(true));
         heightCoroutine = StartCoroutine(MoveCamera(standHeight, () =>
         {
-            // 摄像机回到俯视高度，直接显示古币
-            if (coinObject != null) { coinObject.SetActive(true); Debug.Log("古币显示：StandUp"); }
-
             if (seenDisappear && !seenReappear)
             {
                 seenReappear = true;
@@ -381,7 +379,7 @@ public class Chapter2Manager : MonoBehaviour
                     {
                         "我|等等……从上面看又出现了！",
                         "我|从正上方能看见，蹲低到某个角度之后才消失……",
-                        "我|难道……是视线的角度？好像低过了某个位置，它就突然不见了……",
+                        "我|难道……是视线的角度？好像低过了某个位置，就渐渐看不见了……",
                         "我|这到底是什么原理？我要去找艾莉博士求助一下！"
                     }, ShowFinishPanel);
                 }));
